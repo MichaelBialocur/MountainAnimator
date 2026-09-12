@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#07111d">
+  <title>Mountain Animator — Comparateur 3D</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cesium@1.132.0/Build/Cesium/Widgets/widgets.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <div><span class="eyebrow">ALPINE STUDIO</span><h1>Mountain Animator</h1></div>
+    <div class="header-actions"><button id="rotateBtn">▶ Rotation</button><button id="filmBtn">⛶ Mode film</button></div>
+  </header>
+  <main>
+    <aside id="panel">
+      <section><h2>Sommets comparés</h2><div id="peakList"></div><button class="wide" id="addPeakBtn">＋ Ajouter un sommet</button></section>
+      <section><h2>Présentation</h2>
+        <label>Exagération verticale <output id="exaggerationValue">1.0×</output><input id="exaggeration" type="range" min="1" max="3" value="1" step="0.1"></label>
+        <label>Distance caméra <input id="range" type="range" min="3500" max="18000" value="9000" step="250"></label>
+        <label class="check"><input id="syncCamera" type="checkbox" checked> Caméras synchronisées</label>
+      </section>
+      <section><h2>Parcours GPX</h2><label class="drop" for="gpxInput"><strong>Importer un fichier GPX</strong><span>La trace sera placée sur le relief</span></label><input id="gpxInput" type="file" accept=".gpx,application/gpx+xml" hidden><div id="gpxStats" class="muted">Aucun parcours importé</div></section>
+      <section><h2>Mes statistiques</h2><div class="stats-grid"><label>Distance (km)<input id="distance" type="number" step="0.1"></label><label>D+ (m)<input id="gain" type="number"></label><label>Durée<input id="duration" placeholder="6 h 30"></label><label>Date<input id="date" type="date"></label></div><label>Notes<textarea id="notes" rows="3"></textarea></label><button class="wide" id="saveBtn">Enregistrer localement</button></section>
+    </aside>
+    <section id="stage"><div id="status">Chargement du relief…</div><div id="viewers"></div><div id="comparison"></div></section>
+  </main>
+  <dialog id="peakDialog"><form method="dialog"><h2>Ajouter un sommet</h2><label>Nom<input id="newName" required></label><label>Altitude (m)<input id="newElevation" type="number" required></label><label>Latitude<input id="newLat" type="number" step="any" required></label><label>Longitude<input id="newLon" type="number" step="any" required></label><div class="dialog-actions"><button value="cancel">Annuler</button><button id="confirmPeak" value="default">Ajouter</button></div></form></dialog>
+  <script src="https://cdn.jsdelivr.net/npm/cesium@1.132.0/Build/Cesium/Cesium.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
