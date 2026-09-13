@@ -9,8 +9,8 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://services.arcgisonline.com" crossorigin>
   <link rel="preconnect" href="https://elevation-tiles-prod.s3.amazonaws.com" crossorigin>
-  <link rel="stylesheet" href="styles.css?v=4">
-  <link rel="stylesheet" href="controls.css?v=4">
+  <link rel="stylesheet" href="styles.css?v=5">
+  <link rel="stylesheet" href="controls.css?v=5">
   <script type="importmap">
     {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
@@ -47,12 +47,20 @@
         <label class="range-label"><span>Rotation individuelle <output id="blockRotationValue">0°</output></span><input id="blockRotation" type="range" min="-180" max="180" value="0" step="1"></label>
         <label class="range-label"><span>Décalage du cadre est/ouest <output id="blockEastValue">0 km</output></span><input id="blockEast" type="range" min="-5" max="5" value="0" step="0.25"></label>
         <label class="range-label"><span>Décalage du cadre nord/sud <output id="blockNorthValue">0 km</output></span><input id="blockNorth" type="range" min="-5" max="5" value="0" step="0.25"></label>
+        <label class="toggle-row"><span><b>Couche de neige</b></span><input id="snowEnabled" type="checkbox"></label>
+        <label class="range-label"><span>Altitude de début <output id="snowAltitudeValue"></output></span><input id="snowAltitude" type="range" min="0" max="6000" step="50" value="2800"></label>
+        <p class="control-hint">Ajoute de la neige aux textures satellite ; ne supprime pas la neige déjà photographiée.</p>
         <label class="comment-label">Commentaire du panneau 3D<textarea id="blockComment" rows="3" placeholder="Ex. Sommet atteint après le Jegihorn…"></textarea></label>
         <label class="toggle-row"><span><b>Panneau de statistiques 3D</b><small>Altitude, commentaire et GPX</small></span><input id="blockStatsToggle" type="checkbox" checked></label>
+<label class="range-label"><span>Panneau · gauche / droite <output id="statsXValue"></output></span><input id="statsX" type="range" min="-20" max="20" value="0" step="0.1"></label>
+<label class="range-label"><span>Panneau · hauteur <output id="statsYValue"></output></span><input id="statsY" type="range" min="-20" max="20" value="0" step="0.1"></label>
+<label class="range-label"><span>Panneau · profondeur <output id="statsZValue"></output></span><input id="statsZ" type="range" min="-20" max="20" value="0" step="0.1"></label>
+<button id="resetStatsPosition" class="secondary wide">Réinitialiser la position du panneau</button>
       </section>
       <section class="control-section">
         <div class="section-title"><h2>Nuages</h2><span>ATMOSPHÈRE</span></div>
         <label class="toggle-row"><span><b>Afficher les nuages</b><small>Nuages réellement répartis en profondeur</small></span><input id="cloudToggle" type="checkbox" checked></label>
+        <label class="select-label"><span>Type de nuages</span><select id="cloudType"><option value="cumulus">Cumulus · volumes cotonneux</option><option value="stratus">Stratus · nappes basses</option><option value="cirrus">Cirrus · voiles étirés</option></select></label>
         <label class="range-label"><span>Densité <output id="cloudDensityValue">8</output></span><input id="cloudDensity" type="range" min="1" max="20" value="8" step="1"></label>
         <label class="range-label"><span>Détails volumétriques <output id="cloudDetailValue">2 / 3</output></span><input id="cloudDetail" type="range" min="1" max="3" value="2" step="1"></label>
         <label class="range-label"><span>Opacité <output id="cloudOpacityValue">70 %</output></span><input id="cloudOpacity" type="range" min="0.15" max="1" value="0.7" step="0.05"></label>
@@ -72,6 +80,21 @@
         <button id="gpxOverviewButton" class="secondary wide" disabled>Vue d’ensemble du GPX</button>
       </section>
       <section class="control-section"><details><summary>Statistiques du sommet actif</summary><div class="stats-grid"><label>Distance (km)<input id="distance" type="number" min="0" step="0.1"></label><label>D+ (m)<input id="gain" type="number" min="0"></label><label>Durée<input id="duration" placeholder="6 h 30"></label><label>Date<input id="date" type="date"></label></div><label>Notes<textarea id="notes" rows="3"></textarea></label><button id="saveButton" class="primary wide">Enregistrer sur cet appareil</button></details></section>
+      <section class="control-section">
+        <div class="section-title"><h2>Export vidéo</h2></div>
+        <fieldset id="exportOptions" style="border:0;padding:0;margin:0">
+          <label class="select-label"><span>Résolution</span><select id="exportResolution"><option value="1080p">1080p</option><option value="4k">4K UHD</option></select></label>
+          <label class="select-label"><span>Orientation</span><select id="exportOrientation"><option value="landscape">Paysage · 16:9</option><option value="portrait">Vertical · 9:16</option></select></label>
+          <label class="select-label"><span>Fichier vidéo</span><select id="exportCodec"></select></label>
+          <label class="select-label"><span>Durée d’enregistrement</span><select id="exportDuration"><option value="15">15 s</option><option value="35" selected>35 s</option><option value="60">60 s</option><option value="120">120 s</option></select></label>
+        </fieldset>
+        <p class="control-hint">Enregistre la vue actuelle et les animations en cours à 30 images/s visées. Lance ensuite Animer ou Rotation si nécessaire. Garde cet onglet visible. La 4K dépend de la puissance de l’appareil.</p>
+        <button id="exportStart" class="primary wide">● Enregistrer la vidéo</button>
+        <button id="exportStop" class="secondary wide" disabled>Arrêter et télécharger</button>
+        <button id="exportCancel" class="secondary wide" disabled>Annuler l’export</button>
+        <p id="exportStatus" class="control-hint" role="status">La vidéo inclut la scène, les panneaux et les noms des sommets.</p>
+        <a id="exportDownload" class="secondary wide" hidden>Télécharger la vidéo</a>
+      </section>
       <footer class="sources">Relief : Mapzen Terrain Tiles / AWS · Imagerie : Esri World Imagery</footer>
     </aside>
     <div id="panelScrim"></div>
@@ -88,7 +111,7 @@
   <script>
     addEventListener('error',event=>{if(/WebGL|context/i.test(event.message||'')){const loading=document.getElementById('loadingPanel'),panel=document.getElementById('errorPanel');if(loading)loading.hidden=true;if(panel){panel.hidden=false;panel.textContent='La 3D WebGL est désactivée dans ce navigateur. Active l’accélération graphique ou ouvre cette page dans Chrome, Firefox ou Safari récent.'}}});
   </script>
-  <script type="module" src="peak-dialog.mjs?v=4"></script>
-  <script type="module" src="app.js?v=4.1"></script>
+  <script type="module" src="peak-dialog.mjs?v=5"></script>
+  <script type="module" src="app.js?v=5.1"></script>
 </body>
 </html>

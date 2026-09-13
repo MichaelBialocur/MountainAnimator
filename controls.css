@@ -17,3 +17,6 @@ select:focus{border-color:rgba(146,224,244,.55)}
 button:disabled,select:disabled{opacity:.45;cursor:not-allowed}
 input:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
 @media(max-width:760px){:root{--sidebar:348px}#controlPanel{width:min(348px,92vw)}}
+
+#sceneCanvas { object-fit: contain; }
+#exportDownload[hidden] { display:none; }

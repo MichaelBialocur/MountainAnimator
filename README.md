@@ -74,3 +74,13 @@ Les GPX sont lus localement par le navigateur et ne sont pas téléversés par l
 ## Performances
 
 Le mode **Haute qualité** est le réglage conseillé sur ordinateur récent. Le mode **Équilibré** limite la mémoire GPU sur téléphone. Le mode **Ultra** charge davantage de relief et de texture et peut demander plusieurs secondes par montagne.
+
+
+## V5 — vidéo, neige et atmosphère
+
+- Export local MediaRecorder : 1920×1080 / 3840×2160, ou 1080×1920 / 2160×3840 ; MP4 et WebM proposés uniquement si le navigateur les annonce compatibles. 30 fps visées, encodage en temps réel (pas de rendu image par image hors ligne). Le GPU et l’encodeur peuvent limiter la fluidité, surtout en 4K. Aucun audio.
+- Choisir les paramètres dans Export vidéo, enregistrer puis utiliser Animer/Rotation, ou enregistrer une animation déjà en cours. Arrêt manuel, durée maximale, annulation, lien de téléchargement persistant. Une page masquée termine la capture. Les transitions GPX sont incluses lorsqu’elles ont lieu pendant l’enregistrement.
+- Nuages procéduraux volumétriques par intégration de densité, bruit multi-échelle et atténuation lumineuse : cumulus, stratus, cirrus stylisés. Les volumes complets et leur dérive sont maintenus au-dessus du relief sous-jacent, y compris les blocs voisins pivotés. Ce sont des approximations temps réel, pas une simulation météorologique ni une garantie de photoréalisme.
+- Neige par sommet : activation et seuil 0–6000 m (altitude réelle, indépendante de l’exagération). Transition douce et moindre couverture des fortes pentes. La couche ajoute une apparence de neige, sans épaisseur géométrique et sans effacer la neige déjà présente sur les photos satellite.
+- Panneaux par sommet : position X/Y/Z relative à leur position initiale, réinitialisation, sauvegarde compatible V3/V4 ; occultation par profondeur. Noms des sommets occultés par raycasting et inclus dans la vidéo.
+- Vérification : tests Node/jsdom sur logique, sauvegarde, géométrie et cycle d’enregistrement simulé. Validation GPU et véritable encodage 4K à effectuer dans un navigateur compatible.

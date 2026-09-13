@@ -67,12 +67,26 @@ test('route colour and floor selection persist, old projects inherit marble and 
   assert.equal(appHarness({blockSettings:{}}).globalSettings.groundTexture,'marble');app.dom.window.close();
 });
 
-test('each cloud has its own texture and reshuffling frees the previous materials',()=>{
+test('clouds are varied volumes, clear all terrain, and release GPU resources',()=>{
   const app=appHarness(),block=app.syntheticBlock(),old=block.group.userData.clouds;
-  const textures=old.children.map(cluster=>cluster.userData.material.map);
-  assert.equal(new Set(textures).size,old.children.length);let disposed=0;textures.forEach(texture=>texture.addEventListener('dispose',()=>disposed++));
-  app.window.document.querySelector('#randomizeClouds').click();assert.equal(disposed,textures.length);
+  const materials=old.children.map(cluster=>cluster.userData.volume.material);
+  assert.equal(new Set(materials).size,old.children.length);let disposed=0;materials.forEach(material=>material.addEventListener('dispose',()=>disposed++));
+  for(const c of old.children)assert.ok(c.position.y-c.userData.volume.scale.y/2>2.4);
+  app.window.document.querySelector('#randomizeClouds').click();assert.equal(disposed,materials.length);
   assert.notEqual(block.group.userData.clouds,old);assert.equal(app.globalSettings.cloudSeed,2);app.dom.window.close();
+});
+
+test('snow altitude and panel offsets persist independently and panels respect depth',()=>{
+  const app=appHarness(),first=app.syntheticBlock(),second=app.syntheticBlock('lagginhorn',8.00310);
+  input(app,'snowAltitude','3200');const enabled=app.window.document.querySelector('#snowEnabled');enabled.checked=true;enabled.dispatchEvent(new app.window.Event('change'));
+  assert.equal(first.group.userData.top.material.userData.snow.snowLine.value,3200);
+  assert.equal(second.group.userData.top.material.userData.snow.snowLine.value,1e7);
+  app.refreshStatsBillboards();const before=first.group.userData.statsCard.position.clone();input(app,'statsZ','-8');
+  assert.equal(first.group.userData.statsCard.position.z,before.z-8);assert.equal(second.config.statsZ,0);
+  assert.equal(first.group.userData.statsCard.material.depthTest,true);
+  assert.equal(first.group.userData.statsLeader.material.depthTest,true);
+  assert.equal(JSON.parse(app.window.localStorage.getItem('mountainAnimatorProjectV3')).blockSettings.chavalard.statsZ,-8);
+  app.dom.window.close();
 });
 
 test('alpine stats contain metrics and comments, without a repeated name or heading',()=>{

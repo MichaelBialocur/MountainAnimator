@@ -4,6 +4,8 @@ import { JSDOM } from 'jsdom';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import * as motion from '../route-motion.mjs';
+import * as atmosphere from '../atmosphere.mjs';
+import * as video from '../video-export.mjs';
 import * as art from '../studio-art.mjs';
 
 export function fakeContext(){
@@ -36,12 +38,12 @@ export function appHarness(saved){
     .replace(/^import .*;\n/gm,'')
     .replace('\nrebuildScene();\n','\n// Network loading is replaced by explicit synthetic terrain in tests.\n');
   const sandbox={
-    ...motion,...art,paintGround:canvas=>canvas,THREE:{...THREE,WebGLRenderer:Renderer},OrbitControls,
+    ...motion,...art,...atmosphere,...video,paintGround:canvas=>canvas,THREE:{...THREE,WebGLRenderer:Renderer},OrbitControls,
     document:window.document,window,navigator:window.navigator,localStorage:window.localStorage,DOMParser:window.DOMParser,
     matchMedia:()=>({matches:false}),devicePixelRatio:1,requestAnimationFrame:()=>0,
     setTimeout:(fn,ms)=>{timers.push({fn,ms});return timers.length;},clearTimeout:()=>{},Image:window.Image,URL,URLSearchParams,console
   };
-  const names=['scene','camera','controls','floor','gpxPlayer','globalSettings','createBlock','settingsFor','clearBlocks','positionBlocks','buildGpxRoutes','parseGpx','trackStats','setGpxProgress','toggleGpxAnimation','stopGpxAnimation','advancePlayback','followPose','routeOverviewPose','updateFollowCamera','updateCameraTransition','safeCameraHeight','refreshStatsBillboards','makeStatsCanvas','handleGpxFile','restoreProject','saveProject','formatDuration','bindControls','createPeakLabels','updatePeakLabels'];
+  const names=['scene','camera','controls','floor','gpxPlayer','globalSettings','createBlock','settingsFor','clearBlocks','positionBlocks','buildGpxRoutes','parseGpx','trackStats','setGpxProgress','toggleGpxAnimation','stopGpxAnimation','advancePlayback','followPose','routeOverviewPose','updateFollowCamera','updateCameraTransition','safeCameraHeight','refreshStatsBillboards','makeStatsCanvas','handleGpxFile','restoreProject','saveProject','formatDuration','bindControls','createPeakLabels','updatePeakLabels','clearCloudTerrain','updateSnow'];
   const api=vm.runInNewContext(source+`\n;({${names.join(',')},get blocks(){return blocks;},set blocks(value){blocks=value;},get gpxTrack(){return gpxTrack;},set gpxTrack(value){gpxTrack=value;}})`,sandbox);
   api.window=window;api.dom=dom;api.timers=timers;
   api.syntheticBlock=(id='chavalard',lon=7.11312)=>{

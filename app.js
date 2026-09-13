@@ -1,7 +1,9 @@
+import { cloudVolume, addSnow } from './atmosphere.mjs?v=5';
+import { VideoExport, supportedVideoTypes, videoDimensions } from './video-export.mjs?v=5';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { clamp, smootherstep, dampingAlpha, distanceKm, measureRoute, sampleRoute, smoothRoutePoint, clipToBounds, pointInOutline, interpolateGeo } from './route-motion.mjs?v=4';
-import { paintGround, paintCloud, paintStatsCard, GROUND_KINDS } from './studio-art.mjs?v=4';
+import { paintGround, paintStatsCard, GROUND_KINDS } from './studio-art.mjs?v=4';
 
 const PEAKS = [
   { id:'chavalard', name:'Grand Chavalard', elevation:2899, lat:46.17869, lon:7.11312, region:'Fully' },
@@ -29,7 +31,7 @@ const globalSettings = {
   quality:'high', exaggeration:1, brightness:1.25,
   sunAzimuth:315, sunElevation:38, sunIntensity:3.2,
   clouds:true, cloudDensity:8, cloudDetail:2, cloudOpacity:.7, cloudSize:1,
-  shadows:true, groundTexture:'marble', cloudSeed:1
+  cloudType:'cumulus', shadows:true, groundTexture:'marble', cloudSeed:1
 };
 const blockSettings = new Map();
 let peaks = [...PEAKS];
@@ -43,6 +45,8 @@ let statsTimer;
 let sideMaterial;
 let floor;
 let cloudTime = 0;
+const videoExport=new VideoExport();
+let exportCanvas, exportContext, exportSettings, exportDeadline;
 
 const gpxPlayer = { playing:false, progress:0, duration:25, follow:true, routeBlock:null, phase:'idle', transition:null, offset:null, lastPart:null };
 
@@ -96,7 +100,7 @@ const clock = new THREE.Clock();
 requestAnimationFrame(animate);
 
 function defaultBlockSettings(){
-  return { diameter:12, centerEast:0, centerNorth:0, rotation:0, gpxColor:'#e76f32', comment:'', showStats:true, manualDistance:'', manualGain:'', manualDuration:'', manualDate:'', manualNotes:'' };
+  return { snowEnabled:false, snowAltitude:2800, statsX:0, statsY:0, statsZ:0, diameter:12, centerEast:0, centerNorth:0, rotation:0, gpxColor:'#e76f32', comment:'', showStats:true, manualDistance:'', manualGain:'', manualDuration:'', manualDate:'', manualNotes:'' };
 }
 
 function settingsFor(id){
@@ -189,12 +193,15 @@ function syncBlockEditor(){
   $('#blockDiameter').value=config.diameter; $('#blockDiameterValue').value=`${config.diameter} km`;
   $('#blockRotation').value=config.rotation;$('#blockRotationValue').value=`${config.rotation}°`;
   $('#gpxColor').value=config.gpxColor;
+  for(const key of ['snowAltitude','statsX','statsY','statsZ']){$('#'+key).value=config[key];$('#'+key+'Value').value=config[key]+(key==='snowAltitude'?' m':' km');}
+  $('#snowEnabled').checked=config.snowEnabled;
   syncOffsetLimits(config);
   $('#blockComment').value=config.comment; $('#blockStatsToggle').checked=config.showStats;
   $('#distance').value=config.manualDistance; $('#gain').value=config.manualGain; $('#duration').value=config.manualDuration; $('#date').value=config.manualDate; $('#notes').value=config.manualNotes;
 }
 
 async function rebuildScene(){
+  if(videoExport.active)finishExport(true);
   const version=++buildVersion;
   clearTimeout(rebuildTimer);clearTimeout(statsTimer);
   stopGpxAnimation();
@@ -361,6 +368,7 @@ function createBlock(data,peak,config){
   const geometry=createTopGeometry(data), texture=new THREE.CanvasTexture(data.textureCanvas);
   texture.colorSpace=THREE.SRGBColorSpace; texture.anisotropy=renderer.capabilities.getMaxAnisotropy(); texture.minFilter=THREE.LinearMipmapLinearFilter; texture.magFilter=THREE.LinearFilter;
   const material=new THREE.MeshStandardMaterial({map:texture,color:0xffffff,roughness:.87,metalness:0,alphaTest:.45});
+  addSnow(material,config,globalSettings.exaggeration);
   const top=new THREE.Mesh(geometry,material); top.castShadow=top.receiveShadow=globalSettings.shadows;
   top.customDepthMaterial=new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking,map:texture,alphaTest:.45});
   group.add(top);
@@ -420,44 +428,56 @@ function createSummitMarker(position){
   group.add(dot,halo); return group;
 }
 
-function getCloudTexture(detail,seed){
-  const size=detail===1?256:detail===2?384:512, canvas=document.createElement('canvas'); canvas.width=canvas.height=size;
-  const texture=new THREE.CanvasTexture(paintCloud(canvas,seed,detail));texture.colorSpace=THREE.SRGBColorSpace;texture.minFilter=THREE.LinearMipmapLinearFilter;return texture;
-}
-
 function createClouds(peak,size){
-  const seed=hash(peak.id)+globalSettings.cloudSeed*997,root=new THREE.Group(),rng=seededRandom(seed),puffsPerCluster=[0,2,3,5][globalSettings.cloudDetail];
+  const seed=hash(peak.id)+globalSettings.cloudSeed*997,root=new THREE.Group(),rng=seededRandom(seed);
   root.name='clouds';
-  for(let clusterIndex=0;clusterIndex<globalSettings.cloudDensity;clusterIndex++){
-    const cluster=new THREE.Group(),angle=rng()*Math.PI*2,radius=size*(.11+rng()*.37);
-    cluster.position.set(Math.cos(angle)*radius,.65+rng()*Math.max(1.5,peak.elevation/1000),Math.sin(angle)*radius);
-    cluster.userData={startX:cluster.position.x,startZ:cluster.position.z,phase:rng()*Math.PI*2,speed:.055+rng()*.085};
-    const texture=getCloudTexture(globalSettings.cloudDetail,seed+clusterIndex*617);
-    const opacityFactor=.55+rng()*.45;
-    const material=new THREE.SpriteMaterial({map:texture,transparent:true,opacity:globalSettings.cloudOpacity*opacityFactor,depthWrite:false,color:0xffffff,rotation:(rng()-.5)*.5});
-    const stretch=.7+rng()*1.3,clusterScale=.55+rng()*1.2;
-    for(let puff=0;puff<puffsPerCluster+(clusterIndex%2);puff++){
-      const sprite=new THREE.Sprite(material),base=(.65+rng()*.9)*globalSettings.cloudSize*clusterScale;
-      sprite.position.set((rng()-.5)*1.05*globalSettings.cloudSize,(rng()-.5)*.42*globalSettings.cloudSize,(rng()-.5)*.8*globalSettings.cloudSize);
-      sprite.scale.set(base*stretch*(1.2+rng()*.8),base*(.55+rng()*.65),1); cluster.add(sprite);
-    }
-    cluster.userData.material=material;cluster.userData.opacityFactor=opacityFactor;root.add(cluster);
+  for(let i=0;i<globalSettings.cloudDensity;i++){
+    const cluster=new THREE.Group(),angle=rng()*Math.PI*2,radius=size*(.22+rng()*.35);
+    cluster.position.set(Math.cos(angle)*radius,.8+rng()*2,Math.sin(angle)*radius);
+    const volume=cloudVolume(globalSettings.cloudType,globalSettings.cloudDetail,seed+i*617,globalSettings.cloudSize*(.8+rng()*.8));
+    cluster.add(volume);volume.material.uniforms.opacity.value=globalSettings.cloudOpacity;
+    cluster.userData={startX:cluster.position.x,startZ:cluster.position.z,phase:rng()*6.28,speed:.055+rng()*.085,volume,baseY:cluster.position.y};root.add(cluster);
   }
-  root.visible=globalSettings.clouds; return root;
+  root.visible=globalSettings.clouds;return root;
 }
 
 function refreshClouds(){
   blocks.forEach(block=>{
-    const old=block.group.userData.clouds; block.group.remove(old);
-    old.children.forEach(cluster=>{cluster.userData.material?.map?.dispose();cluster.userData.material?.dispose();});
-    const clouds=createClouds(block.peak,block.data.size); block.group.add(clouds); block.group.userData.clouds=clouds;
+    const old=block.group.userData.clouds;block.group.remove(old);
+    old.traverse(obj=>{obj.geometry?.dispose();obj.material?.dispose();});
+    const clouds=createClouds(block.peak,block.data.size);block.group.add(clouds);block.group.userData.clouds=clouds;
   });
+  clearCloudTerrain();
+}
+
+function clearCloudTerrain(){
+  // Bound the complete cloud volume and its entire drift, across rotated neighbours.
+  scene.updateMatrixWorld(true);
+  const vertex=new THREE.Vector3(),center=new THREE.Vector3();
+  blocks.forEach(owner=>owner.group.userData.clouds.children.forEach(cluster=>{
+    const volume=cluster.userData.volume;
+    center.set(cluster.userData.startX,0,cluster.userData.startZ);owner.group.localToWorld(center);
+    const radius=Math.hypot(volume.scale.x,volume.scale.z)/2+.35;
+    let height=BASE_Y;
+    blocks.forEach(block=>{
+      const positions=block.group.userData.top.geometry.attributes.position;
+      const margin=block.data.size/block.data.grid*1.5;
+      for(let i=0;i<positions.count;i++){
+        vertex.fromBufferAttribute(positions,i);block.group.localToWorld(vertex);
+        if(Math.hypot(vertex.x-center.x,vertex.z-center.z)<=radius+margin)height=Math.max(height,vertex.y);
+      }
+    });
+    cluster.position.y=Math.max(cluster.userData.baseY,height+volume.scale.y/2+.12);
+    const direction=sun.position.clone().normalize();direction.applyAxisAngle(new THREE.Vector3(0,1,0),-owner.group.rotation.y);
+    volume.material.uniforms.lightDir.value.copy(direction);
+  }));
 }
 
 function positionBlocks(){
   const gap=1.15, total=blocks.reduce((sum,block)=>sum+block.data.size,0)+gap*Math.max(0,blocks.length-1);
   let cursor=-total/2;
   blocks.forEach(block=>{block.group.position.x=cursor+block.data.size/2;cursor+=block.data.size+gap});
+  clearCloudTerrain();
 }
 
 function createPeakLabels(){
@@ -469,11 +489,19 @@ function createPeakLabels(){
 }
 
 function updatePeakLabels(){
+  if(updatePeakLabels.next>cloudTime)return;updatePeakLabels.next=cloudTime+.12;
   const width=stage.clientWidth,height=stage.clientHeight;
   blocks.forEach(block=>{
     const label=block.group.userData.label;if(!label)return;
-    const vector=block.group.userData.summitLocal.clone(); vector.y+=.34; block.group.localToWorld(vector); vector.project(camera);
-    label.style.left=`${(vector.x*.5+.5)*width}px`; label.style.top=`${(-vector.y*.5+.5)*height}px`; label.style.display=vector.z>1?'none':'';
+    const vector=block.group.userData.summitLocal.clone(); vector.y+=.34; block.group.localToWorld(vector);
+    const ray=new THREE.Raycaster(camera.position,vector.clone().sub(camera.position).normalize(),0,camera.position.distanceTo(vector)-.03);
+    scene.updateMatrixWorld(true);
+    const hidden=ray.intersectObjects(blocks.flatMap(b=>[b.group.userData.top,b.group.userData.side]),false).some(hit=>{
+      const owner=blocks.find(b=>b.group.userData.top===hit.object);if(!owner)return true;
+      const local=owner.group.worldToLocal(hit.point.clone());return pointInOutline(local.x/(owner.data.size/2),local.z/(owner.data.size/2),organicOutline(hash(owner.peak.id)));
+    });
+    vector.project(camera);
+    label.style.left=`${(vector.x*.5+.5)*width}px`; label.style.top=`${(-vector.y*.5+.5)*height}px`; label.style.display=hidden||Math.abs(vector.z)>1?'none':'';
   });
 }
 
@@ -493,12 +521,12 @@ function refreshStatsBillboards(){
     if(data.statsLeader){block.group.remove(data.statsLeader);data.statsLeader.geometry.dispose();data.statsLeader.material.dispose();data.statsLeader=null}
     if(!block.config.showStats)return;
     const texture=new THREE.CanvasTexture(makeStatsCanvas(block));texture.colorSpace=THREE.SRGBColorSpace;texture.minFilter=THREE.LinearMipmapLinearFilter;
-    const card=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:false,depthWrite:false,toneMapped:false}));
+    const card=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:true,depthWrite:false,toneMapped:false}));
     const width=Math.min(5.2,Math.max(3.7,block.data.size*.38));card.scale.set(width,width*610/1024,1);
     const summit=data.summitLocal,side= summit.x>0?-1:1;
-    card.position.set(side*block.data.size*.28,Math.max(1.8,summit.y*.64),block.data.size*.31);card.renderOrder=20;card.name='stats-card';block.group.add(card);data.statsCard=card;
+    card.position.set(side*(block.data.size*.5+width*.52)+block.config.statsX,Math.max(2,summit.y*.8)+block.config.statsY,block.config.statsZ);card.renderOrder=20;card.name='stats-card';block.group.add(card);data.statsCard=card;
     const start=summit.clone().add(new THREE.Vector3(0,.12,0)),end=card.position.clone();end.x-=side*width*.44;
-    const leader=new THREE.Line(new THREE.BufferGeometry().setFromPoints([start,end]),new THREE.LineBasicMaterial({color:0x8f8265,transparent:true,opacity:.6,depthTest:false}));leader.renderOrder=19;block.group.add(leader);data.statsLeader=leader;
+    const leader=new THREE.Line(new THREE.BufferGeometry().setFromPoints([start,end]),new THREE.LineBasicMaterial({color:0x8f8265,transparent:true,opacity:.6,depthTest:true}));leader.renderOrder=19;block.group.add(leader);data.statsLeader=leader;
   });
 }
 
@@ -523,12 +551,13 @@ function updateVerticalScale(){
     const {data}=block,position=block.group.userData.top.geometry.attributes.position;
     for(let i=0;i<data.heights.length;i++) position.setY(i,data.heights[i]/1000*globalSettings.exaggeration);
     position.needsUpdate=true;block.group.userData.top.geometry.computeVertexNormals();
+    block.group.userData.top.material.userData.snow.snowScale.value=globalSettings.exaggeration;
     const sidePosition=block.group.userData.side.geometry.attributes.position,outline=block.group.userData.side.geometry.userData.outline;
     outline.forEach((point,index)=>sidePosition.setY(index*2+1,sampleGrid(data,point.x*.5+.5,point.z*.5+.5)/1000*globalSettings.exaggeration));
     sidePosition.needsUpdate=true;block.group.userData.side.geometry.computeVertexNormals();
     const summit=localPointForGeo(block.peak,data,block.peak.elevation);block.group.userData.summitLocal.copy(summit);block.group.userData.summitMarker.position.copy(summit).add(new THREE.Vector3(0,.025,0));
   });
-  buildGpxRoutes();
+  clearCloudTerrain();buildGpxRoutes();
 }
 
 function parseGpx(text){
@@ -738,6 +767,7 @@ function startRouteOverview(){
 }
 
 function applyQuality(){
+  if(videoExport.active)finishExport(true);
   const quality=QUALITY[globalSettings.quality],mobile=matchMedia('(max-width: 760px)').matches;
   renderer.setPixelRatio(Math.min(devicePixelRatio,mobile?Math.min(1.8,quality.dpr):quality.dpr));renderer.shadowMap.enabled=globalSettings.shadows;
   sun.shadow.mapSize.set(quality.shadow,quality.shadow);if(sun.shadow.map){sun.shadow.map.dispose();sun.shadow.map=null}
@@ -747,10 +777,19 @@ function applyQuality(){
 function applyLighting(){
   renderer.toneMappingExposure=globalSettings.brightness;sun.intensity=globalSettings.sunIntensity;
   const azimuth=THREE.MathUtils.degToRad(globalSettings.sunAzimuth),elevation=THREE.MathUtils.degToRad(globalSettings.sunElevation),radius=48,flat=Math.cos(elevation)*radius;
-  sun.position.set(Math.sin(azimuth)*flat,Math.sin(elevation)*radius,Math.cos(azimuth)*flat);ambient.intensity=1.75+globalSettings.brightness*.24;
+  sun.position.set(Math.sin(azimuth)*flat,Math.sin(elevation)*radius,Math.cos(azimuth)*flat);ambient.intensity=1.75+globalSettings.brightness*.24;clearCloudTerrain();
 }
 
 function bindControls(){
+  bindVideoExport();
+  $('#cloudType').value=globalSettings.cloudType;
+  $('#cloudType').addEventListener('change',e=>{globalSettings.cloudType=e.target.value;refreshClouds();saveProject();});
+  for(const key of ['snowAltitude','statsX','statsY','statsZ'])$('#'+key).addEventListener('input',e=>{
+    const config=settingsFor(editorPeakId);config[key]=+e.target.value;$('#'+key+'Value').value=config[key]+(key==='snowAltitude'?' m':' km');
+    updateSnow();if(key.startsWith('stats'))refreshStatsBillboards();saveProject();
+  });
+  $('#snowEnabled').addEventListener('change',e=>{settingsFor(editorPeakId).snowEnabled=e.target.checked;updateSnow();saveProject();});
+  $('#resetStatsPosition').addEventListener('click',()=>{Object.assign(settingsFor(editorPeakId),{statsX:0,statsY:0,statsZ:0});syncBlockEditor();refreshStatsBillboards();saveProject();});
   $('#qualitySelect').value=globalSettings.quality;$('#qualitySelect').addEventListener('change',event=>{globalSettings.quality=event.target.value;applyQuality();saveProject();if(globalSettings.quality==='ultra'&&matchMedia('(max-width: 760px)').matches)showError('Le mode Ultra peut être lourd sur téléphone. Repasse en Haute qualité si le navigateur ralentit.');rebuildScene()});
   bindRange('exaggeration','exaggerationValue',value=>`${value.toFixed(1).replace('.',',')}×${value===1?' réelle':''}`,value=>{globalSettings.exaggeration=value;$('.scale-badge').innerHTML=`<i></i><b>Même échelle</b> · relief ${value.toFixed(1).replace('.',',')}×`;updateVerticalScale()});
   bindRange('brightness','brightnessValue',value=>value.toFixed(2).replace('.',','),value=>{globalSettings.brightness=value;applyLighting()});
@@ -762,12 +801,12 @@ function bindControls(){
   $('#cloudToggle').checked=globalSettings.clouds;$('#cloudToggle').addEventListener('change',event=>{globalSettings.clouds=event.target.checked;blocks.forEach(block=>block.group.userData.clouds.visible=globalSettings.clouds);saveProject()});
   bindRange('cloudDensity','cloudDensityValue',value=>String(Math.round(value)),value=>{globalSettings.cloudDensity=Math.round(value);refreshClouds()});
   bindRange('cloudDetail','cloudDetailValue',value=>`${Math.round(value)} / 3`,value=>{globalSettings.cloudDetail=Math.round(value);refreshClouds()});
-  bindRange('cloudOpacity','cloudOpacityValue',value=>`${Math.round(value*100)} %`,value=>{globalSettings.cloudOpacity=value;blocks.forEach(block=>block.group.userData.clouds.children.forEach(cluster=>cluster.userData.material.opacity=value*cluster.userData.opacityFactor))});
+  bindRange('cloudOpacity','cloudOpacityValue',value=>`${Math.round(value*100)} %`,value=>{globalSettings.cloudOpacity=value;blocks.forEach(block=>block.group.userData.clouds.children.forEach(cluster=>cluster.userData.volume.material.uniforms.opacity.value=value))});
   bindRange('cloudSize','cloudSizeValue',value=>`${value.toFixed(1).replace('.',',')}×`,value=>{globalSettings.cloudSize=value;refreshClouds()});
   $('#randomizeClouds').addEventListener('click',()=>{globalSettings.cloudSeed++;refreshClouds();saveProject();});
   $('#blockPeakSelect').addEventListener('change',event=>{editorPeakId=event.target.value;syncBlockEditor()});
   $('#blockDiameter').addEventListener('input',event=>{const config=settingsFor(editorPeakId);config.diameter=+event.target.value;$('#blockDiameterValue').value=`${config.diameter} km`;syncOffsetLimits(config);scheduleRebuild()});
-  $('#blockRotation').addEventListener('input',event=>{stopGpxAnimation();const value=+event.target.value;settingsFor(editorPeakId).rotation=value;$('#blockRotationValue').value=`${value}°`;const block=blocks.find(item=>item.peak.id===editorPeakId);if(block){block.group.rotation.y=THREE.MathUtils.degToRad(value);block.group.updateWorldMatrix(true,true);}saveProject();});
+  $('#blockRotation').addEventListener('input',event=>{stopGpxAnimation();const value=+event.target.value;settingsFor(editorPeakId).rotation=value;$('#blockRotationValue').value=`${value}°`;const block=blocks.find(item=>item.peak.id===editorPeakId);if(block){block.group.rotation.y=THREE.MathUtils.degToRad(value);block.group.updateWorldMatrix(true,true);clearCloudTerrain();}saveProject();});
   $('#blockEast').addEventListener('input',event=>{const config=settingsFor(editorPeakId);config.centerEast=+event.target.value;$('#blockEastValue').value=formatSigned(config.centerEast,' km');scheduleRebuild()});
   $('#blockNorth').addEventListener('input',event=>{const config=settingsFor(editorPeakId);config.centerNorth=+event.target.value;$('#blockNorthValue').value=formatSigned(config.centerNorth,' km');scheduleRebuild()});
   $('#blockComment').addEventListener('input',event=>{settingsFor(editorPeakId).comment=event.target.value;saveProject();clearTimeout(statsTimer);statsTimer=setTimeout(refreshStatsBillboards,180)});
@@ -853,7 +892,7 @@ function formatSigned(value,suffix=''){return `${value>0?'+':''}${Number(value).
 function formatDuration(seconds){const totalMinutes=Math.round(seconds/60),hours=Math.floor(totalMinutes/60),minutes=totalMinutes%60;return hours?`${hours} h ${String(minutes).padStart(2,'0')}`:`${minutes} min`}
 function escapeHtml(value){return String(value).replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]))}
 
-function resize(){const width=stage.clientWidth,height=stage.clientHeight;if(!width||!height)return;renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix()}
+function resize(){if(videoExport.active)return;const width=stage.clientWidth,height=stage.clientHeight;if(!width||!height)return;renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix()}
 
 function animate(){
   requestAnimationFrame(animate);const delta=Math.min(.05,clock.getDelta());cloudTime+=delta;
@@ -861,6 +900,13 @@ function animate(){
   if(!gpxPlayer.transition&&(!gpxPlayer.playing||!gpxPlayer.follow))controls.update();
   blocks.forEach(block=>block.group.userData.clouds.children.forEach(cluster=>{cluster.position.x=cluster.userData.startX+Math.sin(cloudTime*cluster.userData.speed+cluster.userData.phase)*.25;cluster.position.z=cluster.userData.startZ+Math.cos(cloudTime*cluster.userData.speed*.7+cluster.userData.phase)*.16}));
   updatePeakLabels();renderer.render(scene,camera);
+  if(videoExport.active){
+    exportContext.fillStyle='#142631';exportContext.fillRect(0,0,exportCanvas.width,exportCanvas.height);
+    exportContext.drawImage(canvas,0,0);drawExportLabels();
+    const remaining=Math.max(0,(exportDeadline-performance.now())/1000);
+    $('#exportStatus').textContent=`Enregistrement · ${Math.ceil(remaining)} s restantes`;
+    if(remaining===0)finishExport();
+  }
 }
 
 function advancePlayback(delta){
@@ -879,4 +925,50 @@ function advancePlayback(delta){
     if(gpxPlayer.follow)startRouteOverview();
     else{stopGpxAnimation();setPlaybackStatus('Parcours terminé · caméra libre');}
   }
+}
+
+function updateSnow(){blocks.forEach(block=>{const u=block.group.userData.top.material.userData.snow;u.snowLine.value=block.config.snowEnabled?block.config.snowAltitude:1e7;});}
+
+function bindVideoExport(){
+  const types=supportedVideoTypes();
+  $('#exportCodec').innerHTML=types.map((t,i)=>`<option value="${i}">${t.ext.toUpperCase()} · ${t.mime.split('codecs=')[1]||'natif'}</option>`).join('');
+  if(!types.length){$('#exportStart').disabled=true;$('#exportStatus').textContent='Enregistrement vidéo indisponible dans ce navigateur.';}
+  $('#exportStart').addEventListener('click',()=>{
+    if(!blocks.length||!$('#loadingPanel').hidden){showError('Attends le chargement des montagnes avant d’exporter.');return;}
+    try{
+      const [width,height]=videoDimensions($('#exportResolution').value,$('#exportOrientation').value);
+      exportSettings={dpr:renderer.getPixelRatio()};
+      exportCanvas=document.createElement('canvas');exportCanvas.width=width;exportCanvas.height=height;exportContext=exportCanvas.getContext('2d');
+      renderer.setPixelRatio(1);renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();
+      renderer.render(scene,camera);exportContext.fillStyle='#142631';exportContext.fillRect(0,0,width,height);exportContext.drawImage(canvas,0,0);
+      const type=types[+$('#exportCodec').value];
+      videoExport.start({canvas:exportCanvas,...type,onDone:(url,ext)=>{
+        restoreExportView();const link=$('#exportDownload');link.href=url;link.download=`MountainAnimator-${Date.now()}.${ext}`;link.hidden=false;link.click();$('#exportStatus').textContent='Vidéo prête à télécharger.';
+      },onCancel:()=>{restoreExportView();$('#exportStatus').textContent='Export annulé.';},onError:error=>{showError(error.message);}});
+      exportDeadline=performance.now()+Number($('#exportDuration').value)*1000;
+      $('#exportStart').disabled=true;$('#exportStop').disabled=false;$('#exportCancel').disabled=false;$('#exportDownload').hidden=true;
+      $('#exportOptions').disabled=true;
+    }catch(error){restoreExportView();showError(`Export impossible : ${error.message}. Essaie en 1080p ou avec un autre codec.`);}
+  });
+  $('#exportStop').addEventListener('click',()=>finishExport());
+  $('#exportCancel').addEventListener('click',()=>finishExport(true));
+  document.addEventListener('visibilitychange',()=>{if(document.hidden&&videoExport.active){finishExport();showError('Enregistrement arrêté car la page a été masquée.');}});
+  canvas.addEventListener('webglcontextlost',()=>{if(videoExport.active)finishExport(true);});
+}
+function finishExport(cancel=false){videoExport.stop(cancel);}
+function restoreExportView(){
+  videoExport.active=false;if(exportSettings){renderer.setPixelRatio(exportSettings.dpr);exportSettings=null;}resize();
+  $('#exportStart').disabled=!supportedVideoTypes().length;$('#exportStop').disabled=true;$('#exportCancel').disabled=true;$('#exportOptions').disabled=false;
+}
+function drawExportLabels(){
+  const ctx=exportContext,w=exportCanvas.width,h=exportCanvas.height,scale=h/1080;
+  ctx.font=`600 ${22*scale}px sans-serif`;ctx.textAlign='center';
+  blocks.forEach(block=>{
+    const p=block.group.userData.summitLocal.clone();p.y+=.34;block.group.localToWorld(p);p.project(camera);
+    if(Math.abs(p.x)>1||Math.abs(p.y)>1||Math.abs(p.z)>1||block.group.userData.label?.style.display==='none')return;
+    const x=(p.x*.5+.5)*w,y=(-p.y*.5+.5)*h,text=`${block.peak.name} · ${block.peak.elevation} m`;
+    ctx.fillStyle='rgba(15,26,31,.85)';ctx.fillRect(x-ctx.measureText(text).width/2-12*scale,y-30*scale,ctx.measureText(text).width+24*scale,40*scale);
+    ctx.fillStyle='#fff';ctx.fillText(text,x,y);
+  });
+  ctx.textAlign='right';ctx.font=`${13*scale}px sans-serif`;ctx.fillStyle='#fff';ctx.fillText('Relief : Mapzen / AWS · Imagerie : Esri World Imagery',w-20*scale,h-20*scale);
 }
