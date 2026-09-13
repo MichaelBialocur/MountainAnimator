@@ -10,6 +10,7 @@
   <link rel="preconnect" href="https://services.arcgisonline.com" crossorigin>
   <link rel="preconnect" href="https://elevation-tiles-prod.s3.amazonaws.com" crossorigin>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="controls.css">
   <script type="importmap">
     {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
@@ -29,18 +30,41 @@
       </section>
       <section class="control-section">
         <div class="section-title"><h2>Rendu physique</h2><span class="live-dot">LIVE</span></div>
-        <label class="range-label"><span>Diamètre de chaque découpe <output id="patchSizeValue">12 km</output></span><input id="patchSize" type="range" min="8" max="18" value="12" step="1"></label>
+        <label class="select-label"><span>Qualité du relief et des textures</span><select id="qualitySelect"><option value="balanced">Équilibrée</option><option value="high" selected>Haute</option><option value="ultra">Ultra — PC puissant</option></select></label>
         <label class="range-label"><span>Échelle verticale <output id="exaggerationValue">1,0× réelle</output></span><input id="exaggeration" type="range" min="1" max="2.5" value="1" step="0.1"></label>
-        <label class="toggle-row"><span><b>Nuages volumétriques</b><small>Décoration animée</small></span><input id="cloudToggle" type="checkbox" checked></label>
+        <label class="range-label"><span>Luminosité <output id="brightnessValue">1,25</output></span><input id="brightness" type="range" min="0.55" max="2.2" value="1.25" step="0.05"></label>
+        <label class="range-label"><span>Azimut du soleil <output id="sunAzimuthValue">315°</output></span><input id="sunAzimuth" type="range" min="0" max="360" value="315" step="1"></label>
+        <label class="range-label"><span>Hauteur du soleil <output id="sunElevationValue">38°</output></span><input id="sunElevation" type="range" min="5" max="85" value="38" step="1"></label>
+        <label class="range-label"><span>Puissance du soleil <output id="sunIntensityValue">3,2</output></span><input id="sunIntensity" type="range" min="0" max="6" value="3.2" step="0.1"></label>
         <label class="toggle-row"><span><b>Ombres du relief</b><small>Éclairage cinématique</small></span><input id="shadowToggle" type="checkbox" checked></label>
         <button id="resetCameraButton" class="secondary wide">Recentrer la composition</button>
+      </section>
+      <section class="control-section" id="blockEditorSection">
+        <div class="section-title"><h2>Bloc individuel</h2><span>PAR SOMMET</span></div>
+        <label class="select-label"><span>Sommet à modifier</span><select id="blockPeakSelect"></select></label>
+        <label class="range-label"><span>Diamètre <output id="blockDiameterValue">12 km</output></span><input id="blockDiameter" type="range" min="6" max="22" value="12" step="1"></label>
+        <label class="range-label"><span>Décalage du cadre est/ouest <output id="blockEastValue">0 km</output></span><input id="blockEast" type="range" min="-5" max="5" value="0" step="0.25"></label>
+        <label class="range-label"><span>Décalage du cadre nord/sud <output id="blockNorthValue">0 km</output></span><input id="blockNorth" type="range" min="-5" max="5" value="0" step="0.25"></label>
+        <label class="comment-label">Commentaire du panneau 3D<textarea id="blockComment" rows="3" placeholder="Ex. Sommet atteint après le Jegihorn…"></textarea></label>
+        <label class="toggle-row"><span><b>Panneau de statistiques 3D</b><small>Altitude, commentaire et GPX</small></span><input id="blockStatsToggle" type="checkbox" checked></label>
+      </section>
+      <section class="control-section">
+        <div class="section-title"><h2>Nuages</h2><span>ATMOSPHÈRE</span></div>
+        <label class="toggle-row"><span><b>Afficher les nuages</b><small>Nuages réellement répartis en profondeur</small></span><input id="cloudToggle" type="checkbox" checked></label>
+        <label class="range-label"><span>Densité <output id="cloudDensityValue">8</output></span><input id="cloudDensity" type="range" min="1" max="20" value="8" step="1"></label>
+        <label class="range-label"><span>Détails volumétriques <output id="cloudDetailValue">2 / 3</output></span><input id="cloudDetail" type="range" min="1" max="3" value="2" step="1"></label>
+        <label class="range-label"><span>Opacité <output id="cloudOpacityValue">70 %</output></span><input id="cloudOpacity" type="range" min="0.15" max="1" value="0.7" step="0.05"></label>
+        <label class="range-label"><span>Taille <output id="cloudSizeValue">1,0×</output></span><input id="cloudSize" type="range" min="0.4" max="2" value="1" step="0.1"></label>
       </section>
       <section class="control-section">
         <div class="section-title"><h2>Parcours GPX</h2></div>
         <label class="drop-zone" id="dropZone" for="gpxInput"><span class="upload-icon">⌁</span><b>Déposer ou choisir un GPX</b><small>Le parcours rejoint automatiquement sa montagne</small></label>
         <input id="gpxInput" type="file" accept=".gpx,application/gpx+xml" hidden><div id="gpxStats" class="gpx-stats">Aucun parcours importé</div>
+        <div class="gpx-player"><button id="gpxPlayButton" class="primary" disabled>▶ Animer</button><label class="toggle-row compact"><span><b>Caméra suiveuse</b></span><input id="gpxFollowToggle" type="checkbox" checked></label></div>
+        <label class="range-label"><span>Progression <output id="gpxProgressValue">0 %</output></span><input id="gpxProgress" type="range" min="0" max="1000" value="0" step="1" disabled></label>
+        <label class="select-label"><span>Durée de l’animation</span><select id="gpxDuration"><option value="12">12 s</option><option value="25" selected>25 s</option><option value="45">45 s</option><option value="90">90 s</option></select></label>
       </section>
-      <section class="control-section"><details><summary>Statistiques personnelles</summary><div class="stats-grid"><label>Distance (km)<input id="distance" type="number" min="0" step="0.1"></label><label>D+ (m)<input id="gain" type="number" min="0"></label><label>Durée<input id="duration" placeholder="6 h 30"></label><label>Date<input id="date" type="date"></label></div><label>Notes<textarea id="notes" rows="3"></textarea></label><button id="saveButton" class="primary wide">Enregistrer sur cet appareil</button></details></section>
+      <section class="control-section"><details><summary>Statistiques du sommet actif</summary><div class="stats-grid"><label>Distance (km)<input id="distance" type="number" min="0" step="0.1"></label><label>D+ (m)<input id="gain" type="number" min="0"></label><label>Durée<input id="duration" placeholder="6 h 30"></label><label>Date<input id="date" type="date"></label></div><label>Notes<textarea id="notes" rows="3"></textarea></label><button id="saveButton" class="primary wide">Enregistrer sur cet appareil</button></details></section>
       <footer class="sources">Relief : Mapzen Terrain Tiles / AWS · Imagerie : Esri World Imagery</footer>
     </aside>
     <div id="panelScrim"></div>
