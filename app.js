@@ -183,10 +183,7 @@ function syncBlockEditor(){
   select.innerHTML=list.map(peak=>`<option value="${peak.id}" ${peak.id===editorPeakId?'selected':''}>${escapeHtml(peak.name)}</option>`).join('');
   const config=settingsFor(editorPeakId);
   $('#blockDiameter').value=config.diameter; $('#blockDiameterValue').value=`${config.diameter} km`;
-  const maxOffset=Math.max(1,config.diameter/2-.75);
-  for(const id of ['blockEast','blockNorth']){$('#'+id).min=-maxOffset;$('#'+id).max=maxOffset}
-  $('#blockEast').value=config.centerEast; $('#blockEastValue').value=formatSigned(config.centerEast,' km');
-  $('#blockNorth').value=config.centerNorth; $('#blockNorthValue').value=formatSigned(config.centerNorth,' km');
+  syncOffsetLimits(config);
   $('#blockComment').value=config.comment; $('#blockStatsToggle').checked=config.showStats;
   $('#distance').value=config.manualDistance; $('#gain').value=config.manualGain; $('#duration').value=config.manualDuration; $('#date').value=config.manualDate; $('#notes').value=config.manualNotes;
 }
@@ -230,6 +227,7 @@ function clearBlocks(){
     scene.remove(block.group);
     block.group.traverse(object=>{
       object.geometry?.dispose();
+      object.customDepthMaterial?.dispose();
       if(object.material && object.material!==sideMaterial){
         (Array.isArray(object.material)?object.material:[object.material]).forEach(material=>{
           if(material.map && ![...CLOUD_TEXTURES.values()].includes(material.map)) material.map.dispose();
