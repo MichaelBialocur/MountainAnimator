@@ -3,31 +3,56 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#07111d">
-  <title>Mountain Animator — Comparateur 3D</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cesium@1.132.0/Build/Cesium/Widgets/widgets.css">
+  <meta name="theme-color" content="#08111b">
+  <meta name="description" content="Comparez vos sommets sous forme de découpes 3D photoréalistes, à la même échelle.">
+  <title>Mountain Animator — Sommets côte à côte</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://services.arcgisonline.com" crossorigin>
+  <link rel="preconnect" href="https://elevation-tiles-prod.s3.amazonaws.com" crossorigin>
   <link rel="stylesheet" href="styles.css">
+  <script type="importmap">
+    {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
+  </script>
 </head>
 <body>
-  <header>
-    <div><span class="eyebrow">ALPINE STUDIO</span><h1>Mountain Animator</h1></div>
-    <div class="header-actions"><button id="rotateBtn">▶ Rotation</button><button id="filmBtn">⛶ Mode film</button></div>
+  <header class="topbar">
+    <button id="menuButton" class="icon-button menu-button" aria-label="Ouvrir les réglages" aria-expanded="false">☰</button>
+    <a class="brand" href="./" aria-label="Mountain Animator, accueil"><span class="brand-mark" aria-hidden="true">▲</span><span><small>ALPINE STUDIO</small><strong>Mountain Animator</strong></span></a>
+    <div class="header-actions"><button id="rotateButton" class="tool-button"><span>↻</span><b>Rotation</b></button><button id="filmButton" class="tool-button"><span>⛶</span><b>Mode film</b></button></div>
   </header>
   <main>
-    <aside id="panel">
-      <section><h2>Sommets comparés</h2><div id="peakList"></div><button class="wide" id="addPeakBtn">＋ Ajouter un sommet</button></section>
-      <section><h2>Présentation</h2>
-        <label>Exagération verticale <output id="exaggerationValue">1.0×</output><input id="exaggeration" type="range" min="1" max="3" value="1" step="0.1"></label>
-        <label>Distance caméra <input id="range" type="range" min="3500" max="18000" value="9000" step="250"></label>
-        <label class="check"><input id="syncCamera" type="checkbox" checked> Caméras synchronisées</label>
+    <aside id="controlPanel" aria-label="Réglages">
+      <div class="panel-heading"><div><span class="kicker">COMPOSITION</span><h1>Tes sommets</h1></div><button id="closePanelButton" class="icon-button close-button" aria-label="Fermer">×</button></div>
+      <section class="control-section">
+        <div class="section-title"><h2>Découpes affichées</h2><span id="selectedCount">2 / 3</span></div>
+        <div id="peakList" class="peak-list"></div><button id="addPeakButton" class="secondary wide">＋ Ajouter par coordonnées</button>
       </section>
-      <section><h2>Parcours GPX</h2><label class="drop" for="gpxInput"><strong>Importer un fichier GPX</strong><span>La trace sera placée sur le relief</span></label><input id="gpxInput" type="file" accept=".gpx,application/gpx+xml" hidden><div id="gpxStats" class="muted">Aucun parcours importé</div></section>
-      <section><h2>Mes statistiques</h2><div class="stats-grid"><label>Distance (km)<input id="distance" type="number" step="0.1"></label><label>D+ (m)<input id="gain" type="number"></label><label>Durée<input id="duration" placeholder="6 h 30"></label><label>Date<input id="date" type="date"></label></div><label>Notes<textarea id="notes" rows="3"></textarea></label><button class="wide" id="saveBtn">Enregistrer localement</button></section>
+      <section class="control-section">
+        <div class="section-title"><h2>Rendu physique</h2><span class="live-dot">LIVE</span></div>
+        <label class="range-label"><span>Diamètre de chaque découpe <output id="patchSizeValue">12 km</output></span><input id="patchSize" type="range" min="8" max="18" value="12" step="1"></label>
+        <label class="range-label"><span>Échelle verticale <output id="exaggerationValue">1,0× réelle</output></span><input id="exaggeration" type="range" min="1" max="2.5" value="1" step="0.1"></label>
+        <label class="toggle-row"><span><b>Nuages volumétriques</b><small>Décoration animée</small></span><input id="cloudToggle" type="checkbox" checked></label>
+        <label class="toggle-row"><span><b>Ombres du relief</b><small>Éclairage cinématique</small></span><input id="shadowToggle" type="checkbox" checked></label>
+        <button id="resetCameraButton" class="secondary wide">Recentrer la composition</button>
+      </section>
+      <section class="control-section">
+        <div class="section-title"><h2>Parcours GPX</h2></div>
+        <label class="drop-zone" id="dropZone" for="gpxInput"><span class="upload-icon">⌁</span><b>Déposer ou choisir un GPX</b><small>Le parcours rejoint automatiquement sa montagne</small></label>
+        <input id="gpxInput" type="file" accept=".gpx,application/gpx+xml" hidden><div id="gpxStats" class="gpx-stats">Aucun parcours importé</div>
+      </section>
+      <section class="control-section"><details><summary>Statistiques personnelles</summary><div class="stats-grid"><label>Distance (km)<input id="distance" type="number" min="0" step="0.1"></label><label>D+ (m)<input id="gain" type="number" min="0"></label><label>Durée<input id="duration" placeholder="6 h 30"></label><label>Date<input id="date" type="date"></label></div><label>Notes<textarea id="notes" rows="3"></textarea></label><button id="saveButton" class="primary wide">Enregistrer sur cet appareil</button></details></section>
+      <footer class="sources">Relief : Mapzen Terrain Tiles / AWS · Imagerie : Esri World Imagery</footer>
     </aside>
-    <section id="stage"><div id="status">Chargement du relief…</div><div id="viewers"></div><div id="comparison"></div></section>
+    <div id="panelScrim"></div>
+    <section id="stage" aria-label="Scène tridimensionnelle">
+      <canvas id="sceneCanvas"></canvas>
+      <div id="loadingPanel" class="loading-panel" role="status" aria-live="polite"><span class="spinner"></span><span><b id="loadingTitle">Construction des montagnes</b><small id="loadingDetail">Préparation de la scène…</small></span></div>
+      <div id="errorPanel" class="error-panel" hidden></div><div id="peakLabels" aria-hidden="true"></div>
+      <div class="stage-topline"><span class="scale-badge"><i></i><b>Même échelle</b> · relief 1:1</span><span class="quality-badge">SATELLITE + DEM</span></div>
+      <div class="scene-help">Glisser pour tourner · Pincer ou molette pour zoomer</div><div id="comparisonBar" class="comparison-bar"></div><div class="attribution">© Esri · Elevation tiles © Mapzen</div>
+    </section>
   </main>
-  <dialog id="peakDialog"><form method="dialog"><h2>Ajouter un sommet</h2><label>Nom<input id="newName" required></label><label>Altitude (m)<input id="newElevation" type="number" required></label><label>Latitude<input id="newLat" type="number" step="any" required></label><label>Longitude<input id="newLon" type="number" step="any" required></label><div class="dialog-actions"><button value="cancel">Annuler</button><button id="confirmPeak" value="default">Ajouter</button></div></form></dialog>
-  <script src="https://cdn.jsdelivr.net/npm/cesium@1.132.0/Build/Cesium/Cesium.js"></script>
-  <script src="app.js"></script>
+  <dialog id="peakDialog"><form method="dialog" id="peakForm"><div class="dialog-heading"><span class="kicker">NOUVELLE DÉCOUPE</span><h2>Ajouter un sommet</h2></div><label>Nom<input id="newName" required placeholder="Ex. Haute Cime"></label><div class="stats-grid"><label>Altitude (m)<input id="newElevation" type="number" min="1" required></label><label>Latitude<input id="newLat" type="number" min="-90" max="90" step="any" required></label></div><label>Longitude<input id="newLon" type="number" min="-180" max="180" step="any" required></label><div class="dialog-actions"><button value="cancel" class="secondary">Annuler</button><button id="confirmPeakButton" value="default" class="primary">Créer la découpe</button></div></form></dialog>
+  <noscript>Cette application 3D nécessite JavaScript.</noscript><script type="module" src="app.js"></script>
 </body>
 </html>
