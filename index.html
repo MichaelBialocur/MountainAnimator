@@ -53,6 +53,10 @@
     </section>
   </main>
   <dialog id="peakDialog"><form method="dialog" id="peakForm"><div class="dialog-heading"><span class="kicker">NOUVELLE DÉCOUPE</span><h2>Ajouter un sommet</h2></div><label>Nom<input id="newName" required placeholder="Ex. Haute Cime"></label><div class="stats-grid"><label>Altitude (m)<input id="newElevation" type="number" min="1" required></label><label>Latitude<input id="newLat" type="number" min="-90" max="90" step="any" required></label></div><label>Longitude<input id="newLon" type="number" min="-180" max="180" step="any" required></label><div class="dialog-actions"><button value="cancel" class="secondary">Annuler</button><button id="confirmPeakButton" value="default" class="primary">Créer la découpe</button></div></form></dialog>
-  <noscript>Cette application 3D nécessite JavaScript.</noscript><script type="module" src="app.js"></script>
+  <noscript>Cette application 3D nécessite JavaScript.</noscript>
+  <script>
+    addEventListener('error',event=>{if(/WebGL|context/i.test(event.message||'')){const loading=document.getElementById('loadingPanel'),panel=document.getElementById('errorPanel');if(loading)loading.hidden=true;if(panel){panel.hidden=false;panel.textContent='La 3D WebGL est désactivée dans ce navigateur. Active l’accélération graphique ou ouvre cette page dans Chrome, Firefox ou Safari récent.'}}});
+  </script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>
