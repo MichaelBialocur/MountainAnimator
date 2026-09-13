@@ -11,4 +11,9 @@ select:focus{border-color:rgba(146,224,244,.55)}
 .toggle-row.compact{padding:0}
 .toggle-row.compact b{font-size:10px}
 #blockEditorSection[hidden]{display:none}
+.color-label{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:14px 0;color:var(--soft);font-size:11px}
+.color-label input[type=color]{width:54px;height:34px;min-width:54px;padding:3px;margin:0;cursor:pointer;border:1px solid var(--line);border-radius:7px}
+.control-hint{font-size:10px;line-height:1.5;color:var(--muted);margin:10px 0}
+button:disabled,select:disabled{opacity:.45;cursor:not-allowed}
+input:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
 @media(max-width:760px){:root{--sidebar:348px}#controlPanel{width:min(348px,92vw)}}

@@ -9,8 +9,8 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://services.arcgisonline.com" crossorigin>
   <link rel="preconnect" href="https://elevation-tiles-prod.s3.amazonaws.com" crossorigin>
-  <link rel="stylesheet" href="styles.css?v=3">
-  <link rel="stylesheet" href="controls.css?v=3">
+  <link rel="stylesheet" href="styles.css?v=4">
+  <link rel="stylesheet" href="controls.css?v=4">
   <script type="importmap">
     {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
@@ -37,12 +37,14 @@
         <label class="range-label"><span>Hauteur du soleil <output id="sunElevationValue">38°</output></span><input id="sunElevation" type="range" min="5" max="85" value="38" step="1"></label>
         <label class="range-label"><span>Puissance du soleil <output id="sunIntensityValue">3,2</output></span><input id="sunIntensity" type="range" min="0" max="6" value="3.2" step="0.1"></label>
         <label class="toggle-row"><span><b>Ombres du relief</b><small>Éclairage cinématique</small></span><input id="shadowToggle" type="checkbox" checked></label>
+        <label class="select-label"><span>Texture du sol</span><select id="groundTexture"><option value="marble">Marbre blanc veiné</option><option value="dark-marble">Marbre noir</option><option value="slate">Ardoise alpine</option><option value="wood">Bois de refuge</option><option value="studio">Studio mat</option></select></label>
         <button id="resetCameraButton" class="secondary wide">Recentrer la composition</button>
       </section>
       <section class="control-section" id="blockEditorSection">
         <div class="section-title"><h2>Bloc individuel</h2><span>PAR SOMMET</span></div>
         <label class="select-label"><span>Sommet à modifier</span><select id="blockPeakSelect"></select></label>
         <label class="range-label"><span>Diamètre <output id="blockDiameterValue">12 km</output></span><input id="blockDiameter" type="range" min="6" max="22" value="12" step="1"></label>
+        <label class="range-label"><span>Rotation individuelle <output id="blockRotationValue">0°</output></span><input id="blockRotation" type="range" min="-180" max="180" value="0" step="1"></label>
         <label class="range-label"><span>Décalage du cadre est/ouest <output id="blockEastValue">0 km</output></span><input id="blockEast" type="range" min="-5" max="5" value="0" step="0.25"></label>
         <label class="range-label"><span>Décalage du cadre nord/sud <output id="blockNorthValue">0 km</output></span><input id="blockNorth" type="range" min="-5" max="5" value="0" step="0.25"></label>
         <label class="comment-label">Commentaire du panneau 3D<textarea id="blockComment" rows="3" placeholder="Ex. Sommet atteint après le Jegihorn…"></textarea></label>
@@ -55,14 +57,19 @@
         <label class="range-label"><span>Détails volumétriques <output id="cloudDetailValue">2 / 3</output></span><input id="cloudDetail" type="range" min="1" max="3" value="2" step="1"></label>
         <label class="range-label"><span>Opacité <output id="cloudOpacityValue">70 %</output></span><input id="cloudOpacity" type="range" min="0.15" max="1" value="0.7" step="0.05"></label>
         <label class="range-label"><span>Taille <output id="cloudSizeValue">1,0×</output></span><input id="cloudSize" type="range" min="0.4" max="2" value="1" step="0.1"></label>
+        <button id="randomizeClouds" class="secondary wide">↻ Nouvelle répartition des nuages</button>
       </section>
       <section class="control-section">
         <div class="section-title"><h2>Parcours GPX</h2></div>
         <label class="drop-zone" id="dropZone" for="gpxInput"><span class="upload-icon">⌁</span><b>Déposer ou choisir un GPX</b><small>Le parcours rejoint automatiquement sa montagne</small></label>
         <input id="gpxInput" type="file" accept=".gpx,application/gpx+xml" hidden><div id="gpxStats" class="gpx-stats">Aucun parcours importé</div>
+        <label class="color-label"><span>Couleur du tracé · sommet actif</span><input id="gpxColor" type="color" value="#e76f32"></label>
+        <label class="select-label"><span>Montagne suivie par la caméra</span><select id="gpxTarget" disabled><option>Aucun parcours</option></select></label>
         <div class="gpx-player"><button id="gpxPlayButton" class="primary" disabled>▶ Animer</button><label class="toggle-row compact"><span><b>Caméra suiveuse</b></span><input id="gpxFollowToggle" type="checkbox" checked></label></div>
+        <p id="gpxPlaybackStatus" class="control-hint" role="status">Suivi stabilisé · vitesse proportionnelle à la distance</p>
         <label class="range-label"><span>Progression <output id="gpxProgressValue">0 %</output></span><input id="gpxProgress" type="range" min="0" max="1000" value="0" step="1" disabled></label>
-        <label class="select-label"><span>Durée de l’animation</span><select id="gpxDuration"><option value="12">12 s</option><option value="25" selected>25 s</option><option value="45">45 s</option><option value="90">90 s</option></select></label>
+        <label class="select-label"><span>Durée du parcours (hors transitions)</span><select id="gpxDuration"><option value="12">12 s</option><option value="25" selected>25 s</option><option value="45">45 s</option><option value="90">90 s</option></select></label>
+        <button id="gpxOverviewButton" class="secondary wide" disabled>Vue d’ensemble du GPX</button>
       </section>
       <section class="control-section"><details><summary>Statistiques du sommet actif</summary><div class="stats-grid"><label>Distance (km)<input id="distance" type="number" min="0" step="0.1"></label><label>D+ (m)<input id="gain" type="number" min="0"></label><label>Durée<input id="duration" placeholder="6 h 30"></label><label>Date<input id="date" type="date"></label></div><label>Notes<textarea id="notes" rows="3"></textarea></label><button id="saveButton" class="primary wide">Enregistrer sur cet appareil</button></details></section>
       <footer class="sources">Relief : Mapzen Terrain Tiles / AWS · Imagerie : Esri World Imagery</footer>
@@ -76,11 +83,12 @@
       <div class="scene-help">Glisser pour tourner · Pincer ou molette pour zoomer</div><div id="comparisonBar" class="comparison-bar"></div><div class="attribution">© Esri · Elevation tiles © Mapzen</div>
     </section>
   </main>
-  <dialog id="peakDialog"><form method="dialog" id="peakForm"><div class="dialog-heading"><span class="kicker">NOUVELLE DÉCOUPE</span><h2>Ajouter un sommet</h2></div><label>Nom<input id="newName" required placeholder="Ex. Haute Cime"></label><div class="stats-grid"><label>Altitude (m)<input id="newElevation" type="number" min="1" required></label><label>Latitude<input id="newLat" type="number" min="-90" max="90" step="any" required></label></div><label>Longitude<input id="newLon" type="number" min="-180" max="180" step="any" required></label><div class="dialog-actions"><button value="cancel" class="secondary">Annuler</button><button id="confirmPeakButton" value="default" class="primary">Créer la découpe</button></div></form></dialog>
+  <dialog id="peakDialog" aria-labelledby="peakDialogTitle"><form method="dialog" id="peakForm"><div class="dialog-heading"><span class="kicker">NOUVELLE DÉCOUPE</span><h2 id="peakDialogTitle">Ajouter un sommet</h2></div><label>Nom<input id="newName" required maxlength="100" placeholder="Ex. Haute Cime"></label><div class="stats-grid"><label>Altitude (m)<input id="newElevation" type="number" min="1" max="9000" required></label><label>Latitude<input id="newLat" type="number" min="-85" max="85" step="any" required></label></div><label>Longitude<input id="newLon" type="number" min="-180" max="180" step="any" required></label><div class="dialog-actions"><button id="cancelPeakButton" type="button" class="secondary">Annuler</button><button id="confirmPeakButton" type="submit" value="default" class="primary">Créer la découpe</button></div></form></dialog>
   <noscript>Cette application 3D nécessite JavaScript.</noscript>
   <script>
     addEventListener('error',event=>{if(/WebGL|context/i.test(event.message||'')){const loading=document.getElementById('loadingPanel'),panel=document.getElementById('errorPanel');if(loading)loading.hidden=true;if(panel){panel.hidden=false;panel.textContent='La 3D WebGL est désactivée dans ce navigateur. Active l’accélération graphique ou ouvre cette page dans Chrome, Firefox ou Safari récent.'}}});
   </script>
-  <script type="module" src="app.js?v=3"></script>
+  <script type="module" src="peak-dialog.mjs?v=4"></script>
+  <script type="module" src="app.js?v=4"></script>
 </body>
 </html>
