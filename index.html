@@ -9,8 +9,8 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://services.arcgisonline.com" crossorigin>
   <link rel="preconnect" href="https://elevation-tiles-prod.s3.amazonaws.com" crossorigin>
-  <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="controls.css">
+  <link rel="stylesheet" href="styles.css?v=3">
+  <link rel="stylesheet" href="controls.css?v=3">
   <script type="importmap">
     {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
@@ -81,6 +81,6 @@
   <script>
     addEventListener('error',event=>{if(/WebGL|context/i.test(event.message||'')){const loading=document.getElementById('loadingPanel'),panel=document.getElementById('errorPanel');if(loading)loading.hidden=true;if(panel){panel.hidden=false;panel.textContent='La 3D WebGL est désactivée dans ce navigateur. Active l’accélération graphique ou ouvre cette page dans Chrome, Firefox ou Safari récent.'}}});
   </script>
-  <script type="module" src="app.js"></script>
+  <script type="module" src="app.js?v=3"></script>
 </body>
 </html>
