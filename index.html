@@ -66,7 +66,7 @@
         <label class="color-label"><span>Couleur du tracé · sommet actif</span><input id="gpxColor" type="color" value="#e76f32"></label>
         <label class="select-label"><span>Montagne suivie par la caméra</span><select id="gpxTarget" disabled><option>Aucun parcours</option></select></label>
         <div class="gpx-player"><button id="gpxPlayButton" class="primary" disabled>▶ Animer</button><label class="toggle-row compact"><span><b>Caméra suiveuse</b></span><input id="gpxFollowToggle" type="checkbox" checked></label></div>
-        <p id="gpxPlaybackStatus" class="control-hint" role="status">Suivi stabilisé · vitesse proportionnelle à la distance</p>
+        <p id="gpxPlaybackStatus" class="control-hint" role="status">Suivi stabilisé · progression calculée sur la distance</p>
         <label class="range-label"><span>Progression <output id="gpxProgressValue">0 %</output></span><input id="gpxProgress" type="range" min="0" max="1000" value="0" step="1" disabled></label>
         <label class="select-label"><span>Durée du parcours (hors transitions)</span><select id="gpxDuration"><option value="12">12 s</option><option value="25" selected>25 s</option><option value="45">45 s</option><option value="90">90 s</option></select></label>
         <button id="gpxOverviewButton" class="secondary wide" disabled>Vue d’ensemble du GPX</button>
@@ -89,6 +89,6 @@
     addEventListener('error',event=>{if(/WebGL|context/i.test(event.message||'')){const loading=document.getElementById('loadingPanel'),panel=document.getElementById('errorPanel');if(loading)loading.hidden=true;if(panel){panel.hidden=false;panel.textContent='La 3D WebGL est désactivée dans ce navigateur. Active l’accélération graphique ou ouvre cette page dans Chrome, Firefox ou Safari récent.'}}});
   </script>
   <script type="module" src="peak-dialog.mjs?v=4"></script>
-  <script type="module" src="app.js?v=4"></script>
+  <script type="module" src="app.js?v=4.1"></script>
 </body>
 </html>

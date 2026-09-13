@@ -572,7 +572,8 @@ function routeEdgesForBlock(block){
     const a=gpxTrack[i-1],b=gpxTrack[i];
     if(a.segment!==b.segment){part++;continue;}
     const interval=clipToBounds(a,b,block.data.bounds),length=distanceKm(a,b);
-    if(!interval||length<1e-9){part++;continue;}
+    if(length<1e-9)continue;
+    if(!interval){part++;continue;}
     const [start,end]=interval;if(start>0)part++;
     const steps=Math.max(1,Math.ceil(length*(end-start)/spacing));
     let fromGeo=interpolateGeo(a,b,start),from=localPointForGeo(fromGeo,block.data).add(new THREE.Vector3(0,.035,0));

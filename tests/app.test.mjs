@@ -41,6 +41,12 @@ test('segments separated in the GPX never create a false straight connecting lin
   assert.ok(route.motion.total<1.2);app.dom.window.close();
 });
 
+test('stationary repeated GPS points do not introduce a camera transition',()=>{
+  const app=appHarness(),block=app.syntheticBlock(),points=routePoints();
+  app.gpxTrack=[points[0],points[1],{...points[1]},points[2]];app.buildGpxRoutes();
+  assert.equal(new Set(block.group.userData.route.motion.segments.map(edge=>edge.part)).size,1);app.dom.window.close();
+});
+
 test('individual rotation transforms terrain, route, marker and labels without moving a neighbour',()=>{
   const app=appHarness(),first=app.syntheticBlock(),second=app.syntheticBlock('lagginhorn',8.00310);
   app.gpxTrack=routePoints();app.buildGpxRoutes();app.createPeakLabels();
