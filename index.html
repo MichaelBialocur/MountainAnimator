@@ -9,8 +9,8 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://services.arcgisonline.com" crossorigin>
   <link rel="preconnect" href="https://elevation-tiles-prod.s3.amazonaws.com" crossorigin>
-  <link rel="stylesheet" href="styles.css?v=6">
-  <link rel="stylesheet" href="controls.css?v=6">
+  <link rel="stylesheet" href="styles.css?v=7">
+  <link rel="stylesheet" href="controls.css?v=7">
   <script type="importmap">
     {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
@@ -31,6 +31,8 @@
       <section class="control-section">
         <div class="section-title"><h2>Rendu physique</h2><span class="live-dot">LIVE</span></div>
         <label class="select-label"><span>Qualité du relief et des textures</span><select id="qualitySelect"><option value="balanced">Équilibrée</option><option value="high" selected>Haute</option><option value="ultra">Ultra — PC puissant</option></select></label>
+        <label class="range-label"><span>Lissage du relief <output id="terrainSmoothingValue">35 %</output></span><input id="terrainSmoothing" type="range" min="0" max="1" step="0.05" value="0.35"></label>
+        <p class="control-hint">Correction des anomalies isolées toujours active. Le lissage adoucit les petites irrégularités ; une valeur élevée atténue aussi les détails réels.</p>
         <label class="range-label"><span>Échelle verticale <output id="exaggerationValue">1,0× réelle</output></span><input id="exaggeration" type="range" min="1" max="2.5" value="1" step="0.1"></label>
         <label class="range-label"><span>Luminosité <output id="brightnessValue">1,25</output></span><input id="brightness" type="range" min="0.55" max="2.2" value="1.25" step="0.05"></label>
         <label class="range-label"><span>Lumière ambiante <output id="fillLightValue">0,55</output></span><input id="fillLight" type="range" min="0.05" max="2" value="0.55" step="0.05"></label>
@@ -53,21 +55,21 @@
         <label class="range-label"><span>Altitude de début <output id="snowAltitudeValue"></output></span><input id="snowAltitude" type="range" min="0" max="6000" step="50" value="2800"></label>
         <label class="range-label"><span>Couverture neigeuse <output id="snowCoverageValue">68 %</output></span><input id="snowCoverage" type="range" min="0.15" max="1" value="0.68" step="0.01"></label>
         <p class="control-hint">La neige se répartit en plaques selon la pente et laisse des rochers apparents. Ajoute de la neige aux textures satellite ; ne supprime pas la neige déjà photographiée.</p>
-        <label class="comment-label">Commentaire du panneau 3D<textarea id="blockComment" rows="3" placeholder="Ex. Sommet atteint après le Jegihorn…"></textarea></label>
-        <label class="toggle-row"><span><b>Panneau de statistiques 3D</b><small>Altitude, commentaire et GPX</small></span><input id="blockStatsToggle" type="checkbox" checked></label>
-<label class="range-label"><span>Panneau · gauche / droite <output id="statsXValue"></output></span><input id="statsX" type="range" min="-20" max="20" value="0" step="0.1"></label>
-<label class="range-label"><span>Panneau · hauteur <output id="statsYValue"></output></span><input id="statsY" type="range" min="-20" max="20" value="0" step="0.1"></label>
-<label class="range-label"><span>Panneau · profondeur <output id="statsZValue"></output></span><input id="statsZ" type="range" min="-20" max="20" value="0" step="0.1"></label>
-<button id="resetStatsPosition" class="secondary wide">Réinitialiser la position du panneau</button>
+        <label class="comment-label">Commentaire du carnet<textarea id="blockComment" rows="3" placeholder="Ex. Sommet atteint après le Jegihorn…"></textarea></label>
+        <label class="toggle-row"><span><b>Carnet de voyage devant la montagne</b><small>Altitude, commentaire et GPX</small></span><input id="blockStatsToggle" type="checkbox" checked></label>
+<label class="range-label"><span>Carnet · gauche / droite <output id="statsXValue"></output></span><input id="statsX" type="range" min="-20" max="20" value="0" step="0.1"></label>
+<label class="range-label" hidden><span>Panneau · hauteur <output id="statsYValue"></output></span><input id="statsY" type="range" min="-20" max="20" value="0" step="0.1"></label>
+<label class="range-label"><span>Carnet · avant / arrière <output id="statsZValue"></output></span><input id="statsZ" type="range" min="-20" max="20" value="0" step="0.1"></label>
+<button id="resetStatsPosition" class="secondary wide">Replacer le carnet devant la montagne</button>
       </section>
       <section class="control-section">
         <div class="section-title"><h2>Nuages</h2><span>ATMOSPHÈRE</span></div>
         <label class="toggle-row"><span><b>Afficher les nuages</b><small>Nuages réellement répartis en profondeur</small></span><input id="cloudToggle" type="checkbox" checked></label>
-        <label class="select-label"><span>Type de nuages</span><select id="cloudType"><option value="cumulus">Cumulus · volumes cotonneux</option><option value="stratus">Stratus · nappes basses</option><option value="cirrus">Cirrus · voiles étirés</option><option value="mixed">Mélange de nuages</option></select></label>
+        <label class="select-label"><span>Type de nuages</span><select id="cloudType"><option value="cumulus">Cumulus · volumes cotonneux</option><option value="stratus">Stratus · nappes basses</option><option value="cirrus">Cirrus · voiles étirés</option><option value="cumulonimbus">Cumulonimbus · tours et enclumes</option><option value="mixed">Mélange de nuages</option></select></label>
         <label class="range-label"><span>Altitude des nuages <output id="cloudHeightValue">2600 m</output></span><input id="cloudHeight" type="range" min="100" max="8000" step="100" value="2600"></label>
         <label class="range-label"><span>Dispersion verticale <output id="cloudSpreadValue">900 m</output></span><input id="cloudSpread" type="range" min="0" max="2500" step="100" value="900"></label>
         <p class="control-hint">Altitude de référence réelle. Les stratus sont plus bas, les cirrus plus hauts. Un nuage trop bas est relevé pour rester hors du relief.</p>
-        <div id="cloudMix" hidden><p class="control-hint">Poids relatifs du mélange (0 pour exclure un type).</p><label class="range-label"><span>Cumulus <output id="cloudCumulusValue">60</output></span><input id="cloudCumulus" type="range" min="0" max="100" step="5" value="60"></label><label class="range-label"><span>Stratus <output id="cloudStratusValue">25</output></span><input id="cloudStratus" type="range" min="0" max="100" step="5" value="25"></label><label class="range-label"><span>Cirrus <output id="cloudCirrusValue">15</output></span><input id="cloudCirrus" type="range" min="0" max="100" step="5" value="15"></label></div>
+        <div id="cloudMix" hidden><label class="range-label"><span>Cumulonimbus <output id="cloudCumulonimbusValue">20</output></span><input id="cloudCumulonimbus" type="range" min="0" max="100" step="5" value="20"></label><p class="control-hint">Poids relatifs du mélange (0 pour exclure un type).</p><label class="range-label"><span>Cumulus <output id="cloudCumulusValue">60</output></span><input id="cloudCumulus" type="range" min="0" max="100" step="5" value="60"></label><label class="range-label"><span>Stratus <output id="cloudStratusValue">25</output></span><input id="cloudStratus" type="range" min="0" max="100" step="5" value="25"></label><label class="range-label"><span>Cirrus <output id="cloudCirrusValue">15</output></span><input id="cloudCirrus" type="range" min="0" max="100" step="5" value="15"></label></div>
         <label class="range-label"><span>Densité <output id="cloudDensityValue">8</output></span><input id="cloudDensity" type="range" min="1" max="20" value="8" step="1"></label>
         <label class="range-label"><span>Détails volumétriques <output id="cloudDetailValue">2 / 3</output></span><input id="cloudDetail" type="range" min="1" max="3" value="2" step="1"></label>
         <label class="range-label"><span>Opacité <output id="cloudOpacityValue">70 %</output></span><input id="cloudOpacity" type="range" min="0.15" max="1" value="0.7" step="0.05"></label>
@@ -79,6 +81,9 @@
         <label class="drop-zone" id="dropZone" for="gpxInput"><span class="upload-icon">⌁</span><b>Déposer ou choisir un GPX</b><small>Le parcours rejoint automatiquement sa montagne</small></label>
         <input id="gpxInput" type="file" accept=".gpx,application/gpx+xml" hidden><div id="gpxStats" class="gpx-stats">Aucun parcours importé</div>
         <label class="color-label"><span>Couleur du tracé · sommet actif</span><input id="gpxColor" type="color" value="#e76f32"></label>
+        <label class="range-label"><span>Épaisseur du GPX <output id="gpxWidthValue">4 px</output></span><input id="gpxWidth" type="range" min="1" max="16" step="0.5" value="4"></label>
+        <label class="toggle-row"><span><b>Compteurs près du point mobile</b><small>Altitude · D+ · distance</small></span><input id="gpxLiveStats" type="checkbox"></label>
+        <p class="control-hint">Épaisseur de référence à 1080p. Distance et D+ depuis le début du tracé visible sur cette montagne. Altitude issue du GPX, ou du relief si absente ; D+ indisponible sans altitudes GPX.</p>
         <label class="select-label"><span>Montagne suivie par la caméra</span><select id="gpxTarget" disabled><option>Aucun parcours</option></select></label>
         <div class="gpx-player"><button id="gpxPlayButton" class="primary" disabled>▶ Animer</button><label class="toggle-row compact"><span><b>Caméra suiveuse</b></span><input id="gpxFollowToggle" type="checkbox" checked></label></div>
         <p id="gpxPlaybackStatus" class="control-hint" role="status">Suivi stabilisé · progression calculée sur la distance</p>
@@ -87,6 +92,22 @@
         <button id="gpxOverviewButton" class="secondary wide" disabled>Vue d’ensemble du GPX</button>
       </section>
       <section class="control-section"><details><summary>Statistiques du sommet actif</summary><div class="stats-grid"><label>Distance (km)<input id="distance" type="number" min="0" step="0.1"></label><label>D+ (m)<input id="gain" type="number" min="0"></label><label>Durée<input id="duration" placeholder="6 h 30"></label><label>Date<input id="date" type="date"></label></div><label>Notes<textarea id="notes" rows="3"></textarea></label><button id="saveButton" class="primary wide">Enregistrer sur cet appareil</button></details></section>
+      <section class="control-section" id="cinemaSection">
+        <div class="section-title"><h2>Outils caméra</h2><span id="sequenceTotal">0 plans</span></div>
+        <label class="select-label"><span>Mouvement</span><select id="shotType"><option value="orbit">Orbite autour d’une montagne</option><option value="transfer">Liaison entre deux montagnes</option></select></label>
+        <label class="select-label"><span>Montagne de départ</span><select id="shotFrom"></select></label>
+        <label class="select-label" id="shotToRow" hidden><span>Montagne d’arrivée</span><select id="shotTo"></select></label>
+        <label class="select-label"><span>Durée du plan</span><select id="shotDuration"><option value="6">6 s</option><option value="12" selected>12 s</option><option value="20">20 s</option><option value="30">30 s</option><option value="60">60 s</option></select></label>
+        <label class="select-label"><span>Angle orbital</span><select id="shotAngle"><option value="90">90°</option><option value="180">180°</option><option value="360" selected>360°</option><option value="-360">360° · sens inverse</option><option value="720">720°</option></select></label>
+        <label class="select-label"><span>Distance de cadrage</span><select id="shotDistance"><option value="0.65">Rapproché</option><option value="1" selected>Montagne entière</option><option value="1.5">Large</option></select></label>
+        <label class="select-label"><span>Hauteur de vue</span><select id="shotElevation"><option value="18">Rasante · 18°</option><option value="30" selected>30°</option><option value="50">Plongeante · 50°</option></select></label>
+        <p class="control-hint">La liaison recule vers une vue globale, marque une pause, puis s’approche de la montagne d’arrivée. Les plans commencent par une transition douce depuis la vue précédente.</p>
+        <button id="shotPreview" class="secondary wide">Prévisualiser ce mouvement</button><button id="shotAdd" class="secondary wide">＋ Ajouter à la composition</button>
+        <ol id="shotList" class="shot-list"></ol>
+        <button id="sequencePlay" class="primary wide">Lire la composition</button>
+        <button id="cinemaPause" class="secondary">Pause</button><button id="cinemaStop" class="secondary">Arrêter</button>
+        <p id="cinemaStatus" class="control-hint" role="status">Prêt · composition sauvegardée sur cet appareil</p>
+      </section>
       <section class="control-section">
         <div class="section-title"><h2>Export vidéo</h2></div>
         <fieldset id="exportOptions" style="border:0;padding:0;margin:0">
@@ -94,8 +115,8 @@
           <label class="select-label"><span>Orientation</span><select id="exportOrientation"><option value="landscape">Paysage · 16:9</option><option value="portrait">Vertical · 9:16</option></select></label>
           <label class="select-label"><span>Fichier vidéo</span><select id="exportCodec"></select></label>
           <label class="select-label"><span>Cadence du fichier</span><select id="exportFps"><option value="30">30 images/s</option><option value="60">60 images/s</option></select></label>
-          <label class="select-label"><span>Animation à rendre</span><select id="exportMotion"><option value="rotation">Rotation complète · 360°</option><option value="gpx">GPX complet · approche et recul inclus</option><option value="current">Continuer l’animation actuelle</option><option value="still">Caméra fixe · nuages animés</option></select></label>
-          <label class="select-label"><span>Durée du film (hors mode GPX)</span><select id="exportDuration"><option value="15">15 s</option><option value="35" selected>35 s</option><option value="60">60 s</option><option value="120">120 s</option></select></label>
+          <label class="select-label"><span>Animation à rendre</span><select id="exportMotion"><option value="sequence">Composition des outils caméra</option><option value="rotation" selected>Rotation complète · 360°</option><option value="gpx">GPX complet · approche et recul inclus</option><option value="current">Continuer l’animation actuelle</option><option value="still">Caméra fixe · nuages animés</option></select></label>
+          <label class="select-label"><span>Durée (automatique pour GPX et composition)</span><select id="exportDuration"><option value="15">15 s</option><option value="35" selected>35 s</option><option value="60">60 s</option><option value="120">120 s</option></select></label>
         </fieldset>
         <p class="control-hint">Chaque image est calculée puis encodée à cadence fixe. Une scène lourde prend plus de temps à exporter, sans perdre d’images. Le GPX complet utilise sa durée de parcours et ajoute les transitions. Garde la page ouverte jusqu’à la fin.</p>
         <button id="exportStart" class="primary wide">Calculer et exporter la vidéo</button>
@@ -124,7 +145,7 @@
   <script>
     addEventListener('error',event=>{if(/WebGL|context/i.test(event.message||'')){const loading=document.getElementById('loadingPanel'),panel=document.getElementById('errorPanel');if(loading)loading.hidden=true;if(panel){panel.hidden=false;panel.textContent='La 3D WebGL est désactivée dans ce navigateur. Active l’accélération graphique ou ouvre cette page dans Chrome, Firefox ou Safari récent.'}}});
   </script>
-  <script type="module" src="peak-dialog.mjs?v=6"></script>
-  <script type="module" src="app.js?v=6"></script>
+  <script type="module" src="peak-dialog.mjs?v=7"></script>
+  <script type="module" src="app.js?v=7"></script>
 </body>
 </html>

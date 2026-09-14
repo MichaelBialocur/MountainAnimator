@@ -119,3 +119,23 @@ export function paintStatsCard(canvas,stats) {
   ctx.restore();
   return canvas;
 }
+
+export function paintTravelNotebook(canvas,stats,route=[]){
+  const ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height;
+  ctx.fillStyle='#f1e7ce';ctx.fillRect(0,0,w,h);
+  const rng=seededRandom(2147);for(let i=0;i<7000;i++){ctx.fillStyle=`rgba(104,82,43,${rng()*.06})`;ctx.fillRect(rng()*w,rng()*h,2,2);}
+  ctx.strokeStyle='#c8b991';ctx.lineWidth=2;
+  for(let y=120;y<h-80;y+=55){ctx.beginPath();ctx.moveTo(w*.54,y);ctx.lineTo(w*.94,y);ctx.stroke();}
+  ctx.fillStyle='#495f4b';ctx.font='italic 42px Georgia, serif';ctx.fillText('Souvenirs d’ascension',w*.07,100);
+  // Hand-drawn contour map on the left page.
+  ctx.strokeStyle='rgba(82,107,77,.3)';ctx.lineWidth=3;
+  for(let k=0;k<14;k++){ctx.beginPath();for(let i=0;i<=100;i++){const a=i/100*Math.PI*2,r=60+k*16+12*Math.sin(a*3+k*.3);const x=w*.26+Math.cos(a)*r,y=h*.46+Math.sin(a)*r*.8;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}ctx.stroke();}
+  if(route.length>1){const xs=route.map(p=>p.x),zs=route.map(p=>p.z),minX=Math.min(...xs),minZ=Math.min(...zs),dx=Math.max(.01,Math.max(...xs)-minX),dz=Math.max(.01,Math.max(...zs)-minZ);ctx.strokeStyle='#b95734';ctx.lineWidth=6;ctx.beginPath();route.forEach((p,i)=>{const x=w*.10+(p.x-minX)/dx*w*.32,y=h*.25+(p.z-minZ)/dz*h*.45;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();}
+  ctx.fillStyle='#756747';ctx.font='italic 30px Georgia, serif';ctx.fillText(stats.date||'Au fil des sommets',w*.10,h*.86);
+  const rows=[['ALTITUDE',stats.altitude],['DISTANCE',stats.distance],['DÉNIVELÉ +',stats.gain],['DURÉE',stats.duration]];
+  rows.forEach(([label,value],i)=>{const y=115+i*140;ctx.fillStyle='#64705a';ctx.font='600 24px sans-serif';ctx.fillText(label,w*.56,y);ctx.fillStyle='#343e31';fitText(ctx,String(value),w*.56,y+62,w*.37,53,'Georgia, serif');});
+  ctx.fillStyle='#63533b';ctx.font='italic 31px Georgia, serif';wrappedText(ctx,stats.comment||'—',w*.56,760,w*.37,5);
+  const binding=ctx.createLinearGradient(w*.46,0,w*.54,0);binding.addColorStop(0,'rgba(80,55,26,0)');binding.addColorStop(.5,'rgba(80,55,26,.35)');binding.addColorStop(1,'rgba(80,55,26,0)');ctx.fillStyle=binding;ctx.fillRect(w*.46,0,w*.08,h);
+  ctx.strokeStyle='#9d8261';ctx.lineWidth=3;ctx.setLineDash([8,10]);ctx.beginPath();ctx.moveTo(w*.5,25);ctx.lineTo(w*.5,h-25);ctx.stroke();ctx.setLineDash([]);
+  return canvas;
+}

@@ -2,7 +2,7 @@
 
 Application web qui construit automatiquement des **découpes 3D photoréalistes de montagnes**, côte à côte et à la même échelle. L'objectif est de produire directement dans le navigateur le type de composition qui demanderait autrement plusieurs heures dans Blender.
 
-## Version 4
+## Fonctions principales (V7)
 
 - une seule scène Three.js, et non plusieurs cartes séparées ;
 - véritables volumes découpés avec surface topographique, contour organique, faces latérales et base ;
@@ -18,7 +18,7 @@ Application web qui construit automatiquement des **découpes 3D photoréalistes
 - ajout de n'importe quel sommet par latitude, longitude et altitude ;
 - import GPX avec placement sur le relief, couleur par montagne et animation proportionnelle aux distances ;
 - caméra stabilisée, approche progressive depuis la vue actuelle et recul final pour cadrer tout le tracé visible ;
-- fiches d'ascension intégrées à la scène : papier, courbes de niveau et teintes alpines, sans titre ni nom répété ;
+- carnets de voyage ouverts, avec couverture et pages, posés sur le sol devant chaque montagne ;
 - fenêtre d'ajout fermable par Annuler, Échap ou clic extérieur, même avec une saisie vide ;
 - caméra orbitale, rotation automatique et mode film plein écran ;
 - interface responsive pour ordinateur et téléphone.
@@ -43,7 +43,7 @@ Une connexion Internet est nécessaire au premier affichage d'une montagne :
 
 Les tuiles déjà téléchargées restent en cache navigateur selon les règles des fournisseurs. Aucun jeton API n'est nécessaire.
 
-Les matériaux du sol et les silhouettes des nuages sont générés localement. Les nuages utilisent des sprites répartis dans l'espace, sans simulation volumétrique physique. La qualité du relief reste limitée par les données d'altitude disponibles dans la région ; le niveau Ultra ne crée pas de détails géographiques absents de la source.
+Les matériaux du sol et les silhouettes des nuages sont générés localement. Les nuages utilisent un rendu volumétrique procédural, sans simulation météorologique physique. La qualité du relief reste limitée par les données d'altitude disponibles dans la région ; le niveau Ultra ne crée pas de détails géographiques absents de la source.
 
 ## Composer une animation
 
@@ -116,3 +116,50 @@ Vérifications : tests Node/jsdom, films de contrôle MP4/WebM décodés par FFm
 (30 images, 30 i/s, 1 seconde). Le diagnostic `tests/export-smoke.html` permet un
 véritable encodage WebCodecs sur canvas 2D sans dépendre de WebGL. Le rendu GPU de
 la neige et des ombres nécessite un navigateur avec accélération graphique.
+
+
+## V7 — relief corrigé, carnets et composition caméra
+
+- **Relief** : décodage des pixels Terrarium à leur résolution native, puis interpolation
+  des altitudes numériques entre les tuiles. Redimensionner les canaux RGB avant
+  décodage pouvait produire des pointes ou creux par arrondi des couleurs. Un filtre
+  robuste corrige les valeurs manquantes et les pics isolés ; le curseur **Lissage
+  du relief** adoucit les petites irrégularités en préservant les grandes crêtes.
+  À 0 %, la correction des valeurs aberrantes reste active. Une zone trop lacunaire
+  déclenche une erreur explicite. La précision finale dépend toujours du DEM source.
+- **Cumulonimbus** : volume vertical avec sommet en enclume et intérieur plus sombre,
+  sélectionnable seul ou dans le mélange. Référence d’altitude +700 m, puis protection
+  contre les intersections avec le relief. Les nuages restent des approximations
+  procédurales, pas des modèles météorologiques.
+- **Carnets** : couverture en cuir, tranche, pages courbées, papier et courbes de niveau.
+  Ils reçoivent les ombres et restent devant leur montagne quand elle pivote. Les
+  curseurs gauche/droite et avant/arrière règlent leur position au sol. Les anciens
+  décalages des panneaux flottants sont réinitialisés lors de la première migration.
+- **GPX** : trait épais de 1 à 16 pixels de référence à 1080p, mis à l’échelle de la
+  hauteur de rendu ; même épaisseur proportionnelle dans les exports 4K. Option
+  d’affichage de l’altitude, du D+ cumulé et de la distance près du curseur. Distance
+  et D+ portent sur la portion visible du bloc, sans liaison inventée entre segments.
+  L’altitude utilise le GPX, ou le terrain si absente ; D+ affiche « — » si les données
+  d’altitude nécessaires manquent. Les compteurs sont inclus dans les vidéos.
+
+### Composer et exporter les mouvements
+
+Dans **Outils caméra**, choisir une orbite (sommet, angle, durée, distance, hauteur de
+vue) ou une liaison entre deux montagnes. La liaison rejoint le cadrage du départ,
+recule vers une vue globale, marque une pause, puis rejoint la montagne d’arrivée.
+**Prévisualiser** joue le mouvement depuis la vue actuelle ; **Ajouter à la composition**
+conserve le plan. Les flèches réordonnent la liste et × retire un plan. La composition
+est sauvegardée localement, avec une durée totale maximale de 295 secondes.
+
+**Lire la composition** enchaîne les plans avec des transitions douces. Pause/reprise
+conserve le temps du plan ; Arrêter rend la caméra libre dans sa position actuelle.
+Pour produire la vidéo, choisir **Composition des outils caméra** dans **Export vidéo**.
+La durée est calculée à partir de la liste et le cadrage est adapté à l’orientation
+choisie. Chaque image est calculée à son instant exact par le moteur hors temps réel
+V6. La vue de travail et l’état de lecture sont restaurés à la fin ou après annulation.
+Les compositions caméra et la lecture GPX restent deux modes distincts.
+
+Les tests couvrent les raccords de tuiles, pics/creux synthétiques, grandes crêtes,
+carnets au sol, traits épais, compteurs partiels, continuité des plans et restauration
+de l’éditeur après export. Les assertions de scène utilisent les géométries Three.js ;
+elles ne remplacent pas une vérification visuelle avec un GPU compatible.

@@ -1,11 +1,11 @@
 {
   "name": "mountain-animator",
-  "version": "6.0.0",
+  "version": "7.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check app.js && node --check route-motion.mjs && node --check studio-art.mjs && node --check peak-dialog.mjs && node --check atmosphere.mjs && node --check video-export.mjs"
+    "check": "node --check app.js && node --check route-motion.mjs && node --check studio-art.mjs && node --check peak-dialog.mjs && node --check atmosphere.mjs && node --check video-export.mjs && node --check terrain-data.mjs && node --check camera-sequence.mjs"
   },
   "devDependencies": {
     "jsdom": "26.1.0",

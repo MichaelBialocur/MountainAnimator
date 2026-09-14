@@ -36,7 +36,7 @@ test('a sparse GPX is draped on terrain and reveals a fractional edge without ju
 test('segments separated in the GPX never create a false straight connecting line',()=>{
   const app=appHarness(),block=app.syntheticBlock();
   app.gpxTrack=[...routePoints().slice(0,2),{lat:46.18,lon:7.13,segment:1},{lat:46.18,lon:7.14,segment:1}];app.buildGpxRoutes();
-  const route=block.group.userData.route;assert.ok(route.line.isLineSegments);
+  const route=block.group.userData.route;assert.ok(route.line.isLineSegments2);
   assert.equal(new Set(route.motion.segments.map(edge=>edge.part)).size,2);
   assert.ok(route.motion.total<1.2);app.dom.window.close();
 });
@@ -83,8 +83,8 @@ test('snow altitude and panel offsets persist independently and panels respect d
   assert.equal(second.group.userData.top.material.userData.snow.snowLine.value,1e7);
   app.refreshStatsBillboards();const before=first.group.userData.statsCard.position.clone();input(app,'statsZ','-8');
   assert.equal(first.group.userData.statsCard.position.z,before.z-8);assert.equal(second.config.statsZ,0);
-  assert.equal(first.group.userData.statsCard.material.depthTest,true);
-  assert.equal(first.group.userData.statsLeader.material.depthTest,true);
+  assert.equal(first.group.userData.statsCard.userData.surface.material.depthTest,true);
+  assert.equal(first.group.userData.statsLeader,null);
   assert.equal(JSON.parse(app.window.localStorage.getItem('mountainAnimatorProjectV3')).blockSettings.chavalard.statsZ,-8);
   app.dom.window.close();
 });
@@ -131,7 +131,7 @@ test('cloud altitude, spread and mixed types are deterministic and avoid terrain
  input(app,'cloudHeight','5000');input(app,'cloudSpread','0');
  for(const c of block.group.userData.clouds.children)near(c.position.y,5);
  input(app,'cloudType','mixed','change');
- const kinds=new Set(block.group.userData.clouds.children.map(c=>c.userData.kind));assert.equal(kinds.size,3);
+ const kinds=new Set(block.group.userData.clouds.children.map(c=>c.userData.kind));assert.equal(kinds.size,4);
  input(app,'cloudStratus','0');assert.ok(block.group.userData.clouds.children.every(c=>c.userData.kind!=='stratus'));
  input(app,'cloudHeight','100');for(const c of block.group.userData.clouds.children)assert.ok(c.position.y-c.userData.volume.scale.y/2>2.4);
  const saved=JSON.parse(app.window.localStorage.getItem('mountainAnimatorProjectV3'));assert.equal(saved.globalSettings.cloudType,'mixed');assert.equal(saved.globalSettings.cloudHeight,100);app.dom.window.close();
@@ -164,4 +164,43 @@ test('shadow camera fits all terrain after individual rotation, with subdued fil
    const v=new THREE.Vector3(x,y,z).project(shadowCamera);assert.ok(Math.abs(v.x)<=1&&Math.abs(v.y)<=1&&Math.abs(v.z)<=1);
  }
  assert.ok(app.ambient.intensity<1);assert.ok(app.rim.intensity<.3);assert.ok(app.sun.shadow.normalBias<.005);app.dom.window.close();
+});
+
+test('travel notebooks sit on the floor in front of each block and stay there when it rotates',()=>{
+ const app=appHarness(),block=app.syntheticBlock();app.refreshStatsBillboards();
+ const book=block.group.userData.statsCard,before=book.getWorldPosition(new THREE.Vector3());assert.equal(book.name,'travel-notebook');assert.ok(book.children.every(c=>c.isMesh));near(before.y,-.44);assert.ok(before.z>block.data.size/2);
+ input(app,'blockRotation','95');const after=book.getWorldPosition(new THREE.Vector3());assert.ok(before.distanceTo(after)<1e-6);assert.equal(block.group.userData.statsLeader,null);app.dom.window.close();
+});
+test('fat GPX thickness and live metrics follow fractional progress without extra connecting segments',()=>{
+ const app=appHarness(),block=app.syntheticBlock();app.gpxTrack=routePoints();app.buildGpxRoutes();
+ input(app,'gpxWidth','9');const route=block.group.userData.route;near(route.material.linewidth,9*750/1080);
+ const toggle=app.window.document.querySelector('#gpxLiveStats');toggle.checked=true;toggle.dispatchEvent(new app.window.Event('change'));
+ app.setGpxProgress(.25);assert.ok(route.liveLabel.visible);assert.match(route.liveText,/D\+/);const old=route.liveText;app.setGpxProgress(.75);assert.notEqual(route.liveText,old);
+ assert.equal(route.fatGeometry.instanceCount,route.partialIndex+1);const sample=route.fatGeometry.attributes.instanceEnd;near(sample.getX(route.partialIndex),route.cursor.position.x);
+ app.dom.window.close();
+});
+test('cinema preview has a stable start, pauses, reaches a different mountain and saves the shot list',()=>{
+ const app=appHarness();app.syntheticBlock();app.syntheticBlock('lagginhorn',8.0031);app.camera.position.set(0,20,50);app.controls.target.set(0,2,0);const start=app.camera.position.clone();
+ input(app,'shotType','transfer','change');input(app,'shotFrom','chavalard','change');input(app,'shotTo','lagginhorn','change');app.window.document.querySelector('#shotAdd').click();
+ const saved=JSON.parse(app.window.localStorage.getItem('mountainAnimatorProjectV3'));assert.equal(saved.cameraShots.length,1);
+ app.window.document.querySelector('#sequencePlay').click();assert.ok(app.camera.position.distanceTo(start)<1e-6);assert.equal(app.cinema.playing,true);
+ app.advanceCinema(6.5);const middle=app.camera.position.clone();app.window.document.querySelector('#cinemaPause').click();assert.equal(app.cinema.playing,false);assert.ok(app.camera.position.equals(middle));
+ app.window.document.querySelector('#cinemaPause').click();app.advanceCinema(5.5);assert.equal(app.cinema.playing,false);assert.ok(app.controls.target.x>0);app.dom.window.close();
+});
+
+test('offline composition samples absolute film time and restores a paused editor on cancellation',async()=>{
+ let app,duration;const poses=[];
+ class ExportStub{active=false;cancelled=false;async start(options){duration=options.duration;this.active=true;try{
+   for(const time of [0,2.4,6,9,12]){await options.renderFrame({index:Math.round(time*30),time,delta:1/30});poses.push({position:app.camera.position.clone(),target:app.controls.target.clone()});}
+   return null;
+ }finally{this.active=false;}}cancel(){this.cancelled=true;}}
+ app=appHarness(undefined,{VideoExport:ExportStub,supportedVideoTypes:()=>[{ext:'webm',label:'WebM'}]});app.syntheticBlock();app.syntheticBlock('lagginhorn',8.0031);
+ app.camera.position.set(0,20,50);app.controls.target.set(0,2,0);
+ input(app,'shotType','transfer','change');input(app,'shotFrom','chavalard','change');input(app,'shotTo','lagginhorn','change');app.window.document.querySelector('#shotAdd').click();
+ app.window.document.querySelector('#sequencePlay').click();app.advanceCinema(3);app.window.document.querySelector('#cinemaPause').click();
+ const saved=app.saveExportView();app.window.document.querySelector('#loadingPanel').hidden=true;input(app,'exportMotion','sequence','change');input(app,'exportOrientation','portrait','change');
+ await app.runVideoExport();near(duration,12+1/30);assert.ok(poses[0].position.distanceTo(saved.position)<1e-6);assert.ok(poses.at(-1).target.x>0);assert.ok(poses[2].position.distanceTo(poses[2].target)>poses.at(-1).position.distanceTo(poses.at(-1).target));
+ assert.ok(app.camera.position.distanceTo(saved.position)<1e-6);assert.ok(app.controls.target.distanceTo(saved.target)<1e-6);assert.equal(app.cinema.paused,true);assert.equal(app.cinema.playing,false);near(app.cinema.time,3);near(app.camera.aspect,1200/750);
+ assert.equal(app.window.document.querySelector('#cinemaStatus').textContent,saved.cinemaStatus);assert.equal(app.window.document.querySelector('#cinemaPause').textContent,'Reprendre');
+ app.stopCinema();app.window.document.querySelector('#cinemaPause').click();assert.equal(app.cinema.playing,false);app.dom.window.close();
 });

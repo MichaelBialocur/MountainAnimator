@@ -25,3 +25,9 @@ input:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid 
 .render-panel { position:absolute; z-index:80; top:50%; left:50%; transform:translate(-50%,-50%); width:min(400px,calc(100% - 40px)); padding:24px; color:#eee5d7; background:rgba(20,31,36,.97); border:1px solid #817660; border-radius:14px; box-shadow:0 20px 80px #0008; }
 .render-panel progress { width:100%; accent-color:#c9a574; }
 .render-panel p { font-size:13px; line-height:1.5; }
+
+.shot-list { padding:0; list-style:none; font-size:12px; }
+.shot-list li { padding:10px 0; border-bottom:1px solid #ffffff20; }
+.shot-list li div { display:flex; gap:8px; margin-top:5px; }
+.shot-list button { border:1px solid #817660; background:#24342d; color:#f1e7ce; border-radius:5px; padding:4px 12px; }
+label[hidden] { display:none !important; }

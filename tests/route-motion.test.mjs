@@ -57,3 +57,10 @@ test('geographic distance is finite near zero and antipodes',()=>{
   near(distanceKm({lat:0,lon:0},{lat:0,lon:1}),111.19492664455873,1e-6);
   assert.ok(Number.isFinite(distanceKm({lat:0,lon:0},{lat:0,lon:180})));
 });
+
+test('live metrics interpolate altitude and gain by distance, without inventing missing elevation',async()=>{
+ const {routeMetrics}=await import('../route-motion.mjs');
+ const route=measureRoute([{a:{x:0,y:2.035,z:0},b:{x:1,y:2.135,z:0},length:1,part:0,fromGeo:{ele:2000},toGeo:{ele:2100}},{a:{x:1,y:2.135,z:0},b:{x:4,y:2.435,z:0},length:3,part:0,fromGeo:{ele:2100},toGeo:{ele:2400}}]);
+ const stats=routeMetrics(route,2.5);assert.equal(stats.distance,2.5);assert.equal(stats.altitude,2250);assert.equal(stats.gain,250);
+ const missing=measureRoute([{a:{x:0,y:2.035,z:0},b:{x:1,y:2.135,z:0},length:1,part:0}]);assert.equal(routeMetrics(missing,.5).gain,null);assert.ok(Math.abs(routeMetrics(missing,.5).altitude-2050)<1e-6);
+});

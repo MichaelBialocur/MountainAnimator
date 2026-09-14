@@ -93,3 +93,16 @@ export function interpolateGeo(a,b,t) {
     time:Number.isFinite(a.time)&&Number.isFinite(b.time)?a.time+(b.time-a.time)*t:NaN
   };
 }
+
+export function routeMetrics(route,distance,exaggeration=1){
+  const sample=sampleRoute(route,distance);if(!sample)return null;
+  if(!route.metricPrefix){
+    const gain=[0],missing=[0];route.segments.forEach(e=>{const a=e.fromGeo?.ele,b=e.toGeo?.ele,valid=Number.isFinite(a)&&Number.isFinite(b);gain.push(gain.at(-1)+(valid?Math.max(0,b-a):0));missing.push(missing.at(-1)+(valid?0:1));});route.metricPrefix={gain,missing};
+  }
+  const current=route.segments[sample.index],valid=Number.isFinite(current.fromGeo?.ele)&&Number.isFinite(current.toGeo?.ele);
+  const gain=route.metricPrefix.gain[sample.index]+(valid?Math.max(0,current.toGeo.ele-current.fromGeo.ele)*sample.t:0);
+  const hasElevation=route.metricPrefix.missing[sample.index]===0&&valid;
+  const edge=route.segments[sample.index],a=edge.fromGeo?.ele,b=edge.toGeo?.ele;
+  const altitude=Number.isFinite(a)&&Number.isFinite(b)?a+(b-a)*sample.t:(sample.point.y-.035)*1000/exaggeration;
+  return {altitude,distance:sample.distance,gain:hasElevation?gain:null};
+}
