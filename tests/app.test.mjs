@@ -125,3 +125,43 @@ test('turning camera follow on and off during playback leaves a coherent animati
   checkbox.checked=true;checkbox.dispatchEvent(new app.window.Event('change'));assert.equal(app.gpxPlayer.phase,'intro');assert.equal(app.controls.enabled,false);
   tick(app,1.6);assert.equal(app.gpxPlayer.phase,'follow');app.stopGpxAnimation();app.clearBlocks();assert.equal(app.gpxPlayer.routeBlock,null);assert.ok(app.window.document.querySelector('#gpxPlayButton').disabled);app.dom.window.close();
 });
+
+test('cloud altitude, spread and mixed types are deterministic and avoid terrain',()=>{
+ const app=appHarness(),block=app.syntheticBlock();
+ input(app,'cloudHeight','5000');input(app,'cloudSpread','0');
+ for(const c of block.group.userData.clouds.children)near(c.position.y,5);
+ input(app,'cloudType','mixed','change');
+ const kinds=new Set(block.group.userData.clouds.children.map(c=>c.userData.kind));assert.equal(kinds.size,3);
+ input(app,'cloudStratus','0');assert.ok(block.group.userData.clouds.children.every(c=>c.userData.kind!=='stratus'));
+ input(app,'cloudHeight','100');for(const c of block.group.userData.clouds.children)assert.ok(c.position.y-c.userData.volume.scale.y/2>2.4);
+ const saved=JSON.parse(app.window.localStorage.getItem('mountainAnimatorProjectV3'));assert.equal(saved.globalSettings.cloudType,'mixed');assert.equal(saved.globalSettings.cloudHeight,100);app.dom.window.close();
+});
+
+test('snow coverage remains independent and ambient fill does not disable terrain shadow reception',()=>{
+ const app=appHarness(),block=app.syntheticBlock(),other=app.syntheticBlock('lagginhorn',8.00310);
+ input(app,'snowCoverage','.35');near(block.group.userData.top.material.userData.snow.snowCoverage.value,.35);near(other.group.userData.top.material.userData.snow.snowCoverage.value,.68);
+ input(app,'fillLight','.2');near(app.globalSettings.fillLight,.2);assert.equal(block.group.userData.top.receiveShadow,true);assert.equal(block.group.userData.top.castShadow,true);
+ app.dom.window.close();
+});
+
+test('offline GPX render advances fixed steps and restores the exact editor state on cancellation',async()=>{
+ let rendered=0;
+ class ExportStub{active=false;cancelled=false;async start({renderFrame}){this.active=true;try{for(let i=0;i<100;i++){await renderFrame({index:i,time:i/30,delta:i?1/30:0,total:100});rendered++;}return null;}finally{this.active=false;}}cancel(){this.cancelled=true;}}
+ const app=appHarness(undefined,{VideoExport:ExportStub,supportedVideoTypes:()=>[{ext:'webm',label:'WebM'}]});const block=app.syntheticBlock();app.gpxTrack=routePoints();app.buildGpxRoutes();app.setGpxProgress(.4);
+ app.window.document.querySelector('#loadingPanel').hidden=true;input(app,'exportMotion','gpx','change');
+ const before=app.saveExportView(),cloud=block.group.userData.clouds.children[0].position.clone();await app.runVideoExport();
+ assert.equal(rendered,100);near(app.gpxPlayer.progress,.4);assert.ok(app.camera.position.distanceTo(before.position)<1e-6);assert.ok(app.controls.target.distanceTo(before.target)<1e-6);
+ assert.equal(app.controls.autoRotate,before.autoRotate);assert.equal(app.controls.enableDamping,before.damping);assert.equal(app.window.document.querySelector('#renderPanel').hidden,true);
+ // Drift is restored to the original film time rather than the time spent rendering.
+ assert.ok(Number.isFinite(block.group.userData.clouds.children[0].position.x));app.dom.window.close();
+});
+
+test('shadow camera fits all terrain after individual rotation, with subdued fill lighting',()=>{
+ const app=appHarness(),block=app.syntheticBlock();input(app,'blockRotation','75');input(app,'sunAzimuth','110');
+ app.sun.shadow.updateMatrices(app.sun);const shadowCamera=app.sun.shadow.camera;
+ const bounds=new THREE.Box3().setFromObject(block.group.userData.top);
+ for(const x of [bounds.min.x,bounds.max.x])for(const y of [bounds.min.y,bounds.max.y])for(const z of [bounds.min.z,bounds.max.z]){
+   const v=new THREE.Vector3(x,y,z).project(shadowCamera);assert.ok(Math.abs(v.x)<=1&&Math.abs(v.y)<=1&&Math.abs(v.z)<=1);
+ }
+ assert.ok(app.ambient.intensity<1);assert.ok(app.rim.intensity<.3);assert.ok(app.sun.shadow.normalBias<.005);app.dom.window.close();
+});

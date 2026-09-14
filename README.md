@@ -76,7 +76,7 @@ Les GPX sont lus localement par le navigateur et ne sont pas téléversés par l
 Le mode **Haute qualité** est le réglage conseillé sur ordinateur récent. Le mode **Équilibré** limite la mémoire GPU sur téléphone. Le mode **Ultra** charge davantage de relief et de texture et peut demander plusieurs secondes par montagne.
 
 
-## V5 — vidéo, neige et atmosphère
+## V5 — historique (export remplacé par la V6)
 
 - Export local MediaRecorder : 1920×1080 / 3840×2160, ou 1080×1920 / 2160×3840 ; MP4 et WebM proposés uniquement si le navigateur les annonce compatibles. 30 fps visées, encodage en temps réel (pas de rendu image par image hors ligne). Le GPU et l’encodeur peuvent limiter la fluidité, surtout en 4K. Aucun audio.
 - Choisir les paramètres dans Export vidéo, enregistrer puis utiliser Animer/Rotation, ou enregistrer une animation déjà en cours. Arrêt manuel, durée maximale, annulation, lien de téléchargement persistant. Une page masquée termine la capture. Les transitions GPX sont incluses lorsqu’elles ont lieu pendant l’enregistrement.
@@ -84,3 +84,35 @@ Le mode **Haute qualité** est le réglage conseillé sur ordinateur récent. Le
 - Neige par sommet : activation et seuil 0–6000 m (altitude réelle, indépendante de l’exagération). Transition douce et moindre couverture des fortes pentes. La couche ajoute une apparence de neige, sans épaisseur géométrique et sans effacer la neige déjà présente sur les photos satellite.
 - Panneaux par sommet : position X/Y/Z relative à leur position initiale, réinitialisation, sauvegarde compatible V3/V4 ; occultation par profondeur. Noms des sommets occultés par raycasting et inclus dans la vidéo.
 - Vérification : tests Node/jsdom sur logique, sauvegarde, géométrie et cycle d’enregistrement simulé. Validation GPU et véritable encodage 4K à effectuer dans un navigateur compatible.
+
+
+## V6 — rendu hors temps réel
+
+L’export V5 MediaRecorder est remplacé par un calcul déterministe image par image.
+Le rendu avance de 1/30 ou 1/60 seconde par image, sans utiliser le temps réel.
+Chaque image reçoit un timestamp explicite WebCodecs ; la boucle attend l’encodeur
+et vérifie le nombre d’images produites avant de livrer le fichier. Le temps de
+calcul peut dépasser largement la durée du film sans pertes d’images dans le fichier.
+
+- 1080p/4K, paysage/vertical, 30/60 i/s, MP4 H.264 ou WebM VP9/VP8. Compatibilité de
+  l’encodeur vérifiée pour les dimensions et la cadence demandées. Aucun repli en
+  capture d’écran en cas d’incompatibilité.
+- Séquences : tour complet, GPX complet (approche et recul inclus, durée calculée),
+  animation actuelle ou caméra fixe. La vue et l’état de lecture sont restaurés à
+  la fin ou après annulation. Les commandes d’édition sont bloquées pendant le rendu.
+- Calcul local : garder la page ouverte. Un onglet en arrière-plan peut ralentir le
+  calcul ; la fermeture de la page interrompt le travail. Le fichier est assemblé
+  en mémoire avec un garde-fou de 512 Mo de données encodées, sans sauvegarde de reprise.
+- Nuages : altitude de référence, dispersion verticale et mélange à poids réglables.
+  Stratus : −350 m, cirrus : +1400 m par rapport à la référence. La protection du
+  relief peut relever les nuages au-dessus de l’altitude demandée.
+- Neige : bruit non périodique à plusieurs échelles, plaques, affleurements et
+  couverture réglable par sommet. Pente physique indépendante de l’exagération,
+  variation de teinte et de rugosité. Il s’agit d’un matériau, pas d’un manteau simulé.
+- Ombres : lumière ambiante réglable (0,55 par défaut), éclairage secondaire réduit,
+  carte d’ombre ajustée à la composition et biais réduit pour les auto-ombres.
+
+Vérifications : tests Node/jsdom, films de contrôle MP4/WebM décodés par FFmpeg
+(30 images, 30 i/s, 1 seconde). Le diagnostic `tests/export-smoke.html` permet un
+véritable encodage WebCodecs sur canvas 2D sans dépendre de WebGL. Le rendu GPU de
+la neige et des ombres nécessite un navigateur avec accélération graphique.

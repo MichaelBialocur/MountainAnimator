@@ -25,14 +25,14 @@ export function makeDom(){
   return dom;
 }
 
-export function appHarness(saved){
+export function appHarness(saved,overrides={}){
   const dom=makeDom(),{window}=dom;
   const timers=[];
   Object.defineProperties(window.document.querySelector('#stage'),{clientWidth:{value:1200},clientHeight:{value:750}});
   if(saved)window.localStorage.setItem('mountainAnimatorProjectV3',JSON.stringify(saved));
   class Renderer {
     constructor(){this.shadowMap={};this.capabilities={getMaxAnisotropy:()=>8};}
-    setPixelRatio(){}setSize(){}render(){}
+    setPixelRatio(){}getPixelRatio(){return 1;}getContext(){return {isContextLost:()=>false};}setSize(){}render(){}
   }
   const source=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8')
     .replace(/^import .*;\n/gm,'')
@@ -41,9 +41,9 @@ export function appHarness(saved){
     ...motion,...art,...atmosphere,...video,paintGround:canvas=>canvas,THREE:{...THREE,WebGLRenderer:Renderer},OrbitControls,
     document:window.document,window,navigator:window.navigator,localStorage:window.localStorage,DOMParser:window.DOMParser,
     matchMedia:()=>({matches:false}),devicePixelRatio:1,requestAnimationFrame:()=>0,
-    setTimeout:(fn,ms)=>{timers.push({fn,ms});return timers.length;},clearTimeout:()=>{},Image:window.Image,URL,URLSearchParams,console
+    setTimeout:(fn,ms)=>{timers.push({fn,ms});return timers.length;},clearTimeout:()=>{},Image:window.Image,URL,URLSearchParams,console,performance,...overrides
   };
-  const names=['scene','camera','controls','floor','gpxPlayer','globalSettings','createBlock','settingsFor','clearBlocks','positionBlocks','buildGpxRoutes','parseGpx','trackStats','setGpxProgress','toggleGpxAnimation','stopGpxAnimation','advancePlayback','followPose','routeOverviewPose','updateFollowCamera','updateCameraTransition','safeCameraHeight','refreshStatsBillboards','makeStatsCanvas','handleGpxFile','restoreProject','saveProject','formatDuration','bindControls','createPeakLabels','updatePeakLabels','clearCloudTerrain','updateSnow'];
+  const names=['scene','camera','controls','floor','gpxPlayer','globalSettings','createBlock','settingsFor','clearBlocks','positionBlocks','buildGpxRoutes','parseGpx','trackStats','setGpxProgress','toggleGpxAnimation','stopGpxAnimation','advancePlayback','followPose','routeOverviewPose','updateFollowCamera','updateCameraTransition','safeCameraHeight','refreshStatsBillboards','makeStatsCanvas','handleGpxFile','restoreProject','saveProject','formatDuration','bindControls','createPeakLabels','updatePeakLabels','clearCloudTerrain','updateSnow','runVideoExport','saveExportView','restoreExportView','sun','ambient','rim'];
   const api=vm.runInNewContext(source+`\n;({${names.join(',')},get blocks(){return blocks;},set blocks(value){blocks=value;},get gpxTrack(){return gpxTrack;},set gpxTrack(value){gpxTrack=value;}})`,sandbox);
   api.window=window;api.dom=dom;api.timers=timers;
   api.syntheticBlock=(id='chavalard',lon=7.11312)=>{

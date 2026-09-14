@@ -1,0 +1,25 @@
+<!doctype html><html lang="fr"><meta charset="utf-8"><title>Diagnostic export image par image</title>
+<style>body{font:16px system-ui;background:#18242b;color:#eee;padding:24px}canvas,video{width:480px;max-width:100%;display:block;margin:12px 0}button,select{padding:10px}pre{white-space:pre-wrap}</style>
+<h1>Diagnostic de l’encodeur</h1><p>Test indépendant du GPU 3D : une seconde, 30 images, calcul volontairement retardé de 50 ms par image.</p>
+<label>Résolution <select id="resolution"><option value="small">320 × 180</option><option value="1080p">1920 × 1080</option><option value="4k">3840 × 2160</option></select></label>
+<button id="mp4">Tester MP4</button><button id="webm">Tester WebM</button><button id="cancel">Annuler</button>
+<pre id="status" role="status">Prêt</pre><canvas id="canvas" width="320" height="180"></canvas><video id="video" controls></video>
+<script type="module">
+import {VideoExport} from '../video-export.mjs?v=6';
+const canvas=document.querySelector('canvas'),ctx=canvas.getContext('2d'),status=document.querySelector('#status'),video=document.querySelector('video');
+const job=new VideoExport();let url;
+document.querySelector('#cancel').onclick=()=>job.cancel();
+for(const ext of ['mp4','webm'])document.querySelector('#'+ext).onclick=async()=>{
+  if(job.active)return;document.querySelector('#mp4').disabled=document.querySelector('#webm').disabled=true;
+  const resolution=document.querySelector('#resolution').value;canvas.width=resolution==='4k'?3840:resolution==='1080p'?1920:320;canvas.height=canvas.width*9/16;
+  const started=performance.now();let frames=0;
+  try{const blob=await job.start({canvas,ext,fps:30,duration:1,renderFrame:async({index,time})=>{
+    ctx.fillStyle='#183c50';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#e5ac55';ctx.fillRect(time*(canvas.width-80),50,80,80);ctx.fillStyle='#fff';ctx.font='24px sans-serif';ctx.fillText(`Frame ${index} · t=${time.toFixed(3)}`,10,30);frames++;
+    await new Promise(resolve=>setTimeout(resolve,50));
+  },onProgress:(i,n)=>status.textContent=`${i}/${n}`});
+  if(!blob){status.textContent='Annulé';return;}if(url)URL.revokeObjectURL(url);url=URL.createObjectURL(blob);video.src=url;
+  video.onloadedmetadata=()=>{status.textContent=JSON.stringify({result:'PASS',format:ext,width:video.videoWidth,height:video.videoHeight,frames,duration:video.duration,renderSeconds:(performance.now()-started)/1000,bytes:blob.size},null,2);};
+  video.onerror=()=>status.textContent='FAIL: le navigateur ne décode pas le fichier produit';
+  }catch(e){status.textContent='FAIL: '+e.message;}finally{document.querySelector('#mp4').disabled=document.querySelector('#webm').disabled=false;}
+};
+</script></html>

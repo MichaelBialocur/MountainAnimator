@@ -1,5 +1,5 @@
-import { cloudVolume, addSnow } from './atmosphere.mjs?v=5';
-import { VideoExport, supportedVideoTypes, videoDimensions } from './video-export.mjs?v=5';
+import { cloudVolume, addSnow, cloudTypeFor } from './atmosphere.mjs?v=6';
+import { VideoExport, supportedVideoTypes, videoDimensions } from './video-export.mjs?v=6';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { clamp, smootherstep, dampingAlpha, distanceKm, measureRoute, sampleRoute, smoothRoutePoint, clipToBounds, pointInOutline, interpolateGeo } from './route-motion.mjs?v=4';
@@ -31,7 +31,7 @@ const globalSettings = {
   quality:'high', exaggeration:1, brightness:1.25,
   sunAzimuth:315, sunElevation:38, sunIntensity:3.2,
   clouds:true, cloudDensity:8, cloudDetail:2, cloudOpacity:.7, cloudSize:1,
-  cloudType:'cumulus', shadows:true, groundTexture:'marble', cloudSeed:1
+  cloudType:'cumulus', cloudHeight:2600, cloudSpread:900, cloudCumulus:60, cloudStratus:25, cloudCirrus:15, fillLight:.55, shadows:true, groundTexture:'marble', cloudSeed:1
 };
 const blockSettings = new Map();
 let peaks = [...PEAKS];
@@ -46,7 +46,7 @@ let sideMaterial;
 let floor;
 let cloudTime = 0;
 const videoExport=new VideoExport();
-let exportCanvas, exportContext, exportSettings, exportDeadline;
+let exportCanvas, exportContext, exportSettings, exportUrl;
 
 const gpxPlayer = { playing:false, progress:0, duration:25, follow:true, routeBlock:null, phase:'idle', transition:null, offset:null, lastPart:null };
 
@@ -80,9 +80,9 @@ sun.shadow.camera.left = -55;
 sun.shadow.camera.right = 55;
 sun.shadow.camera.top = 38;
 sun.shadow.camera.bottom = -38;
-sun.shadow.bias = -.00018;
-sun.shadow.normalBias = .025;
-scene.add(sun);
+sun.shadow.bias = -.00004;
+sun.shadow.normalBias = .0025;
+scene.add(sun,sun.target);
 const rim = new THREE.DirectionalLight(0x8ed9f5, 1.35);
 rim.position.set(28, 12, -22);
 scene.add(rim);
@@ -100,7 +100,7 @@ const clock = new THREE.Clock();
 requestAnimationFrame(animate);
 
 function defaultBlockSettings(){
-  return { snowEnabled:false, snowAltitude:2800, statsX:0, statsY:0, statsZ:0, diameter:12, centerEast:0, centerNorth:0, rotation:0, gpxColor:'#e76f32', comment:'', showStats:true, manualDistance:'', manualGain:'', manualDuration:'', manualDate:'', manualNotes:'' };
+  return { snowCoverage:.68, snowEnabled:false, snowAltitude:2800, statsX:0, statsY:0, statsZ:0, diameter:12, centerEast:0, centerNorth:0, rotation:0, gpxColor:'#e76f32', comment:'', showStats:true, manualDistance:'', manualGain:'', manualDuration:'', manualDate:'', manualNotes:'' };
 }
 
 function settingsFor(id){
@@ -193,7 +193,7 @@ function syncBlockEditor(){
   $('#blockDiameter').value=config.diameter; $('#blockDiameterValue').value=`${config.diameter} km`;
   $('#blockRotation').value=config.rotation;$('#blockRotationValue').value=`${config.rotation}°`;
   $('#gpxColor').value=config.gpxColor;
-  for(const key of ['snowAltitude','statsX','statsY','statsZ']){$('#'+key).value=config[key];$('#'+key+'Value').value=config[key]+(key==='snowAltitude'?' m':' km');}
+  for(const key of ['snowAltitude','snowCoverage','statsX','statsY','statsZ']){$('#'+key).value=config[key];$('#'+key+'Value').value=key==='snowCoverage'?`${Math.round(config[key]*100)} %`:config[key]+(key==='snowAltitude'?' m':' km');}
   $('#snowEnabled').checked=config.snowEnabled;
   syncOffsetLimits(config);
   $('#blockComment').value=config.comment; $('#blockStatsToggle').checked=config.showStats;
@@ -201,7 +201,7 @@ function syncBlockEditor(){
 }
 
 async function rebuildScene(){
-  if(videoExport.active)finishExport(true);
+  if(videoExport.active)return;
   const version=++buildVersion;
   clearTimeout(rebuildTimer);clearTimeout(statsTimer);
   stopGpxAnimation();
@@ -431,12 +431,16 @@ function createSummitMarker(position){
 function createClouds(peak,size){
   const seed=hash(peak.id)+globalSettings.cloudSeed*997,root=new THREE.Group(),rng=seededRandom(seed);
   root.name='clouds';
+  if(globalSettings.cloudType==='mixed'&&globalSettings.cloudCumulus+globalSettings.cloudStratus+globalSettings.cloudCirrus===0)return root;
   for(let i=0;i<globalSettings.cloudDensity;i++){
     const cluster=new THREE.Group(),angle=rng()*Math.PI*2,radius=size*(.22+rng()*.35);
-    cluster.position.set(Math.cos(angle)*radius,.8+rng()*2,Math.sin(angle)*radius);
-    const volume=cloudVolume(globalSettings.cloudType,globalSettings.cloudDetail,seed+i*617,globalSettings.cloudSize*(.8+rng()*.8));
+    const kind=cloudTypeFor(i,globalSettings.cloudDensity,globalSettings.cloudType,{cumulus:globalSettings.cloudCumulus,stratus:globalSettings.cloudStratus,cirrus:globalSettings.cloudCirrus});
+    const layer=kind==='cirrus'?1400:kind==='stratus'?-350:0;
+    const altitude=Math.max(100,globalSettings.cloudHeight+layer+(rng()-.5)*globalSettings.cloudSpread);
+    cluster.position.set(Math.cos(angle)*radius,altitude/1000*globalSettings.exaggeration,Math.sin(angle)*radius);
+    const volume=cloudVolume(kind,globalSettings.cloudDetail,seed+i*617,globalSettings.cloudSize*(.8+rng()*.8));
     cluster.add(volume);volume.material.uniforms.opacity.value=globalSettings.cloudOpacity;
-    cluster.userData={startX:cluster.position.x,startZ:cluster.position.z,phase:rng()*6.28,speed:.055+rng()*.085,volume,baseY:cluster.position.y};root.add(cluster);
+    cluster.userData={startX:cluster.position.x,startZ:cluster.position.z,phase:rng()*6.28,speed:.055+rng()*.085,volume,kind,altitude,baseY:cluster.position.y};root.add(cluster);
   }
   root.visible=globalSettings.clouds;return root;
 }
@@ -447,7 +451,7 @@ function refreshClouds(){
     old.traverse(obj=>{obj.geometry?.dispose();obj.material?.dispose();});
     const clouds=createClouds(block.peak,block.data.size);block.group.add(clouds);block.group.userData.clouds=clouds;
   });
-  clearCloudTerrain();
+  clearCloudTerrain();fitTerrainShadows();
 }
 
 function clearCloudTerrain(){
@@ -467,6 +471,7 @@ function clearCloudTerrain(){
         if(Math.hypot(vertex.x-center.x,vertex.z-center.z)<=radius+margin)height=Math.max(height,vertex.y);
       }
     });
+    cluster.userData.baseY=cluster.userData.altitude/1000*globalSettings.exaggeration;
     cluster.position.y=Math.max(cluster.userData.baseY,height+volume.scale.y/2+.12);
     const direction=sun.position.clone().normalize();direction.applyAxisAngle(new THREE.Vector3(0,1,0),-owner.group.rotation.y);
     volume.material.uniforms.lightDir.value.copy(direction);
@@ -477,7 +482,7 @@ function positionBlocks(){
   const gap=1.15, total=blocks.reduce((sum,block)=>sum+block.data.size,0)+gap*Math.max(0,blocks.length-1);
   let cursor=-total/2;
   blocks.forEach(block=>{block.group.position.x=cursor+block.data.size/2;cursor+=block.data.size+gap});
-  clearCloudTerrain();
+  clearCloudTerrain();fitTerrainShadows();
 }
 
 function createPeakLabels(){
@@ -557,7 +562,7 @@ function updateVerticalScale(){
     sidePosition.needsUpdate=true;block.group.userData.side.geometry.computeVertexNormals();
     const summit=localPointForGeo(block.peak,data,block.peak.elevation);block.group.userData.summitLocal.copy(summit);block.group.userData.summitMarker.position.copy(summit).add(new THREE.Vector3(0,.025,0));
   });
-  clearCloudTerrain();buildGpxRoutes();
+  clearCloudTerrain();fitTerrainShadows();buildGpxRoutes();
 }
 
 function parseGpx(text){
@@ -767,25 +772,30 @@ function startRouteOverview(){
 }
 
 function applyQuality(){
-  if(videoExport.active)finishExport(true);
+  if(videoExport.active)return;
   const quality=QUALITY[globalSettings.quality],mobile=matchMedia('(max-width: 760px)').matches;
   renderer.setPixelRatio(Math.min(devicePixelRatio,mobile?Math.min(1.8,quality.dpr):quality.dpr));renderer.shadowMap.enabled=globalSettings.shadows;
   sun.shadow.mapSize.set(quality.shadow,quality.shadow);if(sun.shadow.map){sun.shadow.map.dispose();sun.shadow.map=null}
-  $('.quality-badge').textContent=`SATELLITE + DEM · ${quality.label}`;
+  $('.quality-badge').textContent=`SATELLITE + DEM · ${quality.label}`;fitTerrainShadows();
 }
 
 function applyLighting(){
   renderer.toneMappingExposure=globalSettings.brightness;sun.intensity=globalSettings.sunIntensity;
   const azimuth=THREE.MathUtils.degToRad(globalSettings.sunAzimuth),elevation=THREE.MathUtils.degToRad(globalSettings.sunElevation),radius=48,flat=Math.cos(elevation)*radius;
-  sun.position.set(Math.sin(azimuth)*flat,Math.sin(elevation)*radius,Math.cos(azimuth)*flat);ambient.intensity=1.75+globalSettings.brightness*.24;clearCloudTerrain();
+  sun.position.set(Math.sin(azimuth)*flat,Math.sin(elevation)*radius,Math.cos(azimuth)*flat);ambient.intensity=globalSettings.fillLight;rim.intensity=globalSettings.fillLight*.3;fitTerrainShadows();clearCloudTerrain();
 }
 
 function bindControls(){
+  bindRange('fillLight','fillLightValue',v=>v.toFixed(2),v=>{globalSettings.fillLight=v;applyLighting();});
+  bindRange('cloudHeight','cloudHeightValue',v=>`${v} m`,v=>{globalSettings.cloudHeight=v;refreshClouds();});
+  bindRange('cloudSpread','cloudSpreadValue',v=>`${v} m`,v=>{globalSettings.cloudSpread=v;refreshClouds();});
+  for(const key of ['cloudCumulus','cloudStratus','cloudCirrus'])bindRange(key,key+'Value',v=>String(v),v=>{globalSettings[key]=v;refreshClouds();});
+
   bindVideoExport();
-  $('#cloudType').value=globalSettings.cloudType;
-  $('#cloudType').addEventListener('change',e=>{globalSettings.cloudType=e.target.value;refreshClouds();saveProject();});
-  for(const key of ['snowAltitude','statsX','statsY','statsZ'])$('#'+key).addEventListener('input',e=>{
-    const config=settingsFor(editorPeakId);config[key]=+e.target.value;$('#'+key+'Value').value=config[key]+(key==='snowAltitude'?' m':' km');
+  $('#cloudType').value=globalSettings.cloudType;$('#cloudMix').hidden=globalSettings.cloudType!=='mixed';
+  $('#cloudType').addEventListener('change',e=>{globalSettings.cloudType=e.target.value;$('#cloudMix').hidden=globalSettings.cloudType!=='mixed';refreshClouds();saveProject();});
+  for(const key of ['snowAltitude','snowCoverage','statsX','statsY','statsZ'])$('#'+key).addEventListener('input',e=>{
+    const config=settingsFor(editorPeakId);config[key]=+e.target.value;$('#'+key+'Value').value=key==='snowCoverage'?`${Math.round(config[key]*100)} %`:config[key]+(key==='snowAltitude'?' m':' km');
     updateSnow();if(key.startsWith('stats'))refreshStatsBillboards();saveProject();
   });
   $('#snowEnabled').addEventListener('change',e=>{settingsFor(editorPeakId).snowEnabled=e.target.checked;updateSnow();saveProject();});
@@ -796,7 +806,7 @@ function bindControls(){
   bindRange('sunAzimuth','sunAzimuthValue',value=>`${Math.round(value)}°`,value=>{globalSettings.sunAzimuth=value;applyLighting()});
   bindRange('sunElevation','sunElevationValue',value=>`${Math.round(value)}°`,value=>{globalSettings.sunElevation=value;applyLighting()});
   bindRange('sunIntensity','sunIntensityValue',value=>value.toFixed(1).replace('.',','),value=>{globalSettings.sunIntensity=value;applyLighting()});
-  $('#shadowToggle').checked=globalSettings.shadows;$('#shadowToggle').addEventListener('change',event=>{globalSettings.shadows=event.target.checked;renderer.shadowMap.enabled=globalSettings.shadows;blocks.forEach(block=>{block.group.userData.top.castShadow=block.group.userData.top.receiveShadow=globalSettings.shadows;block.group.userData.side.castShadow=globalSettings.shadows});saveProject()});
+  $('#shadowToggle').checked=globalSettings.shadows;$('#shadowToggle').addEventListener('change',event=>{globalSettings.shadows=event.target.checked;renderer.shadowMap.enabled=globalSettings.shadows;blocks.forEach(block=>{block.group.userData.top.castShadow=block.group.userData.top.receiveShadow=globalSettings.shadows;block.group.userData.side.castShadow=block.group.userData.side.receiveShadow=globalSettings.shadows});saveProject()});
   $('#groundTexture').value=globalSettings.groundTexture;$('#groundTexture').addEventListener('change',event=>{globalSettings.groundTexture=event.target.value;applyGroundTexture();saveProject();});
   $('#cloudToggle').checked=globalSettings.clouds;$('#cloudToggle').addEventListener('change',event=>{globalSettings.clouds=event.target.checked;blocks.forEach(block=>block.group.userData.clouds.visible=globalSettings.clouds);saveProject()});
   bindRange('cloudDensity','cloudDensityValue',value=>String(Math.round(value)),value=>{globalSettings.cloudDensity=Math.round(value);refreshClouds()});
@@ -806,7 +816,7 @@ function bindControls(){
   $('#randomizeClouds').addEventListener('click',()=>{globalSettings.cloudSeed++;refreshClouds();saveProject();});
   $('#blockPeakSelect').addEventListener('change',event=>{editorPeakId=event.target.value;syncBlockEditor()});
   $('#blockDiameter').addEventListener('input',event=>{const config=settingsFor(editorPeakId);config.diameter=+event.target.value;$('#blockDiameterValue').value=`${config.diameter} km`;syncOffsetLimits(config);scheduleRebuild()});
-  $('#blockRotation').addEventListener('input',event=>{stopGpxAnimation();const value=+event.target.value;settingsFor(editorPeakId).rotation=value;$('#blockRotationValue').value=`${value}°`;const block=blocks.find(item=>item.peak.id===editorPeakId);if(block){block.group.rotation.y=THREE.MathUtils.degToRad(value);block.group.updateWorldMatrix(true,true);clearCloudTerrain();}saveProject();});
+  $('#blockRotation').addEventListener('input',event=>{stopGpxAnimation();const value=+event.target.value;settingsFor(editorPeakId).rotation=value;$('#blockRotationValue').value=`${value}°`;const block=blocks.find(item=>item.peak.id===editorPeakId);if(block){block.group.rotation.y=THREE.MathUtils.degToRad(value);block.group.updateWorldMatrix(true,true);clearCloudTerrain();fitTerrainShadows();}saveProject();});
   $('#blockEast').addEventListener('input',event=>{const config=settingsFor(editorPeakId);config.centerEast=+event.target.value;$('#blockEastValue').value=formatSigned(config.centerEast,' km');scheduleRebuild()});
   $('#blockNorth').addEventListener('input',event=>{const config=settingsFor(editorPeakId);config.centerNorth=+event.target.value;$('#blockNorthValue').value=formatSigned(config.centerNorth,' km');scheduleRebuild()});
   $('#blockComment').addEventListener('input',event=>{settingsFor(editorPeakId).comment=event.target.value;saveProject();clearTimeout(statsTimer);statsTimer=setTimeout(refreshStatsBillboards,180)});
@@ -894,19 +904,15 @@ function escapeHtml(value){return String(value).replace(/[&<>'"]/g,char=>({'&':'
 
 function resize(){if(videoExport.active)return;const width=stage.clientWidth,height=stage.clientHeight;if(!width||!height)return;renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix()}
 
-function animate(){
-  requestAnimationFrame(animate);const delta=Math.min(.05,clock.getDelta());cloudTime+=delta;
-  advancePlayback(delta);
-  if(!gpxPlayer.transition&&(!gpxPlayer.playing||!gpxPlayer.follow))controls.update();
+function updateCloudAnimation(){
   blocks.forEach(block=>block.group.userData.clouds.children.forEach(cluster=>{cluster.position.x=cluster.userData.startX+Math.sin(cloudTime*cluster.userData.speed+cluster.userData.phase)*.25;cluster.position.z=cluster.userData.startZ+Math.cos(cloudTime*cluster.userData.speed*.7+cluster.userData.phase)*.16}));
-  updatePeakLabels();renderer.render(scene,camera);
-  if(videoExport.active){
-    exportContext.fillStyle='#142631';exportContext.fillRect(0,0,exportCanvas.width,exportCanvas.height);
-    exportContext.drawImage(canvas,0,0);drawExportLabels();
-    const remaining=Math.max(0,(exportDeadline-performance.now())/1000);
-    $('#exportStatus').textContent=`Enregistrement · ${Math.ceil(remaining)} s restantes`;
-    if(remaining===0)finishExport();
-  }
+}
+function animate(){
+  requestAnimationFrame(animate);const delta=Math.min(.05,clock.getDelta());
+  if(exportSettings)return;
+  cloudTime+=delta;advancePlayback(delta);
+  if(!gpxPlayer.transition&&(!gpxPlayer.playing||!gpxPlayer.follow))controls.update(delta);
+  updateCloudAnimation();updatePeakLabels();renderer.render(scene,camera);
 }
 
 function advancePlayback(delta){
@@ -927,38 +933,94 @@ function advancePlayback(delta){
   }
 }
 
-function updateSnow(){blocks.forEach(block=>{const u=block.group.userData.top.material.userData.snow;u.snowLine.value=block.config.snowEnabled?block.config.snowAltitude:1e7;});}
+function updateSnow(){blocks.forEach(block=>{const u=block.group.userData.top.material.userData.snow;u.snowLine.value=block.config.snowEnabled?block.config.snowAltitude:1e7;u.snowCoverage.value=block.config.snowCoverage;});}
 
 function bindVideoExport(){
   const types=supportedVideoTypes();
-  $('#exportCodec').innerHTML=types.map((t,i)=>`<option value="${i}">${t.ext.toUpperCase()} · ${t.mime.split('codecs=')[1]||'natif'}</option>`).join('');
-  if(!types.length){$('#exportStart').disabled=true;$('#exportStatus').textContent='Enregistrement vidéo indisponible dans ce navigateur.';}
-  $('#exportStart').addEventListener('click',()=>{
-    if(!blocks.length||!$('#loadingPanel').hidden){showError('Attends le chargement des montagnes avant d’exporter.');return;}
-    try{
-      const [width,height]=videoDimensions($('#exportResolution').value,$('#exportOrientation').value);
-      exportSettings={dpr:renderer.getPixelRatio()};
-      exportCanvas=document.createElement('canvas');exportCanvas.width=width;exportCanvas.height=height;exportContext=exportCanvas.getContext('2d');
-      renderer.setPixelRatio(1);renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();
-      renderer.render(scene,camera);exportContext.fillStyle='#142631';exportContext.fillRect(0,0,width,height);exportContext.drawImage(canvas,0,0);
-      const type=types[+$('#exportCodec').value];
-      videoExport.start({canvas:exportCanvas,...type,onDone:(url,ext)=>{
-        restoreExportView();const link=$('#exportDownload');link.href=url;link.download=`MountainAnimator-${Date.now()}.${ext}`;link.hidden=false;link.click();$('#exportStatus').textContent='Vidéo prête à télécharger.';
-      },onCancel:()=>{restoreExportView();$('#exportStatus').textContent='Export annulé.';},onError:error=>{showError(error.message);}});
-      exportDeadline=performance.now()+Number($('#exportDuration').value)*1000;
-      $('#exportStart').disabled=true;$('#exportStop').disabled=false;$('#exportCancel').disabled=false;$('#exportDownload').hidden=true;
-      $('#exportOptions').disabled=true;
-    }catch(error){restoreExportView();showError(`Export impossible : ${error.message}. Essaie en 1080p ou avec un autre codec.`);}
-  });
-  $('#exportStop').addEventListener('click',()=>finishExport());
-  $('#exportCancel').addEventListener('click',()=>finishExport(true));
-  document.addEventListener('visibilitychange',()=>{if(document.hidden&&videoExport.active){finishExport();showError('Enregistrement arrêté car la page a été masquée.');}});
-  canvas.addEventListener('webglcontextlost',()=>{if(videoExport.active)finishExport(true);});
+  $('#exportCodec').innerHTML=types.map(t=>`<option value="${t.ext}">${t.label}</option>`).join('');
+  $('#exportStart').disabled=!types.length;
+  if(!types.length)$('#exportStatus').textContent='Rendu image par image indisponible : utilise Chrome ou Edge récent avec WebCodecs.';
+  $('#exportStart').addEventListener('click',runVideoExport);
+  $('#renderCancel').addEventListener('click',()=>videoExport.cancel());
+  canvas.addEventListener('webglcontextlost',()=>{if(videoExport.active)videoExport.cancel();});
 }
-function finishExport(cancel=false){videoExport.stop(cancel);}
+
+function lockExportControls(locked){
+  $('#controlPanel').inert=locked;$('.topbar').inert=locked;
+  $('#renderPanel').hidden=!locked;canvas.style.pointerEvents=locked?'none':'';
+}
+
+function saveExportView(){
+  return {dpr:renderer.getPixelRatio(),position:camera.position.clone(),target:controls.target.clone(),
+    far:camera.far,maxDistance:controls.maxDistance,cloudTime,autoRotate:controls.autoRotate,enabled:controls.enabled,
+    damping:controls.enableDamping,player:{...gpxPlayer,offset:gpxPlayer.offset?.clone(),
+    transition:gpxPlayer.transition?{...gpxPlayer.transition,fromPosition:gpxPlayer.transition.fromPosition.clone(),fromTarget:gpxPlayer.transition.fromTarget.clone(),toPosition:gpxPlayer.transition.toPosition.clone(),toTarget:gpxPlayer.transition.toTarget.clone()}:null},
+    playbackStatus:$('#gpxPlaybackStatus').textContent};
+}
+
+async function runVideoExport(){
+  if(exportSettings)return;
+  if(!blocks.length||!$('#loadingPanel').hidden){showError('Attends le chargement des montagnes avant d’exporter.');return;}
+  const mode=$('#exportMotion').value;
+  if(mode==='gpx'&&!gpxPlayer.routeBlock){showError('Importe un GPX avant de choisir le rendu du parcours.');return;}
+  const [width,height]=videoDimensions($('#exportResolution').value,$('#exportOrientation').value);
+  const fps=+$('#exportFps').value,ext=$('#exportCodec').value;
+  exportSettings=saveExportView();videoExport.cancelled=false;lockExportControls(true);
+  $('#renderStatus').textContent='Préparation de l’encodeur…';$('#renderProgress').value=0;
+  const started=performance.now();
+  try{
+    await document.fonts?.ready;
+    exportCanvas=document.createElement('canvas');exportCanvas.width=width;exportCanvas.height=height;exportContext=exportCanvas.getContext('2d');
+    renderer.setPixelRatio(1);renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();
+    // Remove interactive inertia: the exported camera depends only on film time.
+    controls.enableDamping=false;controls.autoRotate=false;controls.enabled=false;
+    let duration=+$('#exportDuration').value;
+    if(mode==='gpx'){
+      stopGpxAnimation();setGpxProgress(0);gpxPlayer.follow=true;toggleGpxAnimation();
+      const parts=new Set(gpxPlayer.routeBlock.group.userData.route.motion.segments.map(edge=>edge.part)).size;
+      duration=gpxPlayer.duration+2.4+3+Math.max(0,parts-1)+.5;
+    }else if(mode==='rotation'||mode==='still'){stopGpxAnimation();}
+    controls.enabled=false;controls.enableDamping=false;
+    const orbit=camera.position.clone().sub(controls.target),rotationTarget=controls.target.clone();
+    if(videoExport.cancelled){$('#exportStatus').textContent='Rendu annulé.';return;}
+    const blob=await videoExport.start({canvas:exportCanvas,ext,fps,duration,
+      renderFrame:({index,time,delta})=>{
+        if(renderer.getContext().isContextLost())throw Error('Le contexte graphique a été perdu. Réduis la qualité puis relance le rendu.');
+        cloudTime=exportSettings.cloudTime+time;
+        if(mode==='rotation'){
+          camera.position.copy(orbit).applyAxisAngle(new THREE.Vector3(0,1,0),-time/duration*Math.PI*2).add(rotationTarget);controls.target.copy(rotationTarget);camera.lookAt(controls.target);
+        }else if(mode==='gpx'||mode==='current'){
+          if(index>0)advancePlayback(delta);
+          if(mode==='current'&&exportSettings.autoRotate&&!gpxPlayer.playing&&!gpxPlayer.transition){
+            camera.position.copy(orbit).applyAxisAngle(new THREE.Vector3(0,1,0),-time*2*Math.PI/60*controls.autoRotateSpeed).add(rotationTarget);camera.lookAt(controls.target);
+          }
+        }
+        updateCloudAnimation();updatePeakLabels.next=0;updatePeakLabels();renderer.render(scene,camera);
+        exportContext.fillStyle='#142631';exportContext.fillRect(0,0,width,height);exportContext.drawImage(canvas,0,0);drawExportLabels();
+      },onProgress:(frame,total)=>{
+        const elapsed=(performance.now()-started)/1000,eta=elapsed/frame*(total-frame);
+        $('#renderProgress').value=frame/total;$('#renderStatus').textContent=`${frame} / ${total} images · ${Math.round(frame/total*100)} % · reste environ ${formatDuration(eta)}`;
+      }});
+    if(blob){
+      if(exportUrl)URL.revokeObjectURL(exportUrl);exportUrl=URL.createObjectURL(blob);
+      const link=$('#exportDownload');link.href=exportUrl;link.download=`MountainAnimator-${Date.now()}.${ext}`;link.hidden=false;link.click();
+      $('#exportStatus').textContent=`Rendu terminé · ${width} × ${height} · ${fps} i/s · ${duration.toFixed(1)} s.`;
+    }else $('#exportStatus').textContent='Rendu annulé. La scène est restaurée.';
+  }catch(error){$('#exportStatus').textContent=`Rendu impossible : ${error.message}`;showError(error.message);}
+  finally{restoreExportView();}
+}
+
 function restoreExportView(){
-  videoExport.active=false;if(exportSettings){renderer.setPixelRatio(exportSettings.dpr);exportSettings=null;}resize();
-  $('#exportStart').disabled=!supportedVideoTypes().length;$('#exportStop').disabled=true;$('#exportCancel').disabled=true;$('#exportOptions').disabled=false;
+  const saved=exportSettings;if(!saved)return;
+  Object.assign(gpxPlayer,saved.player);setGpxProgress(saved.player.progress);
+  controls.autoRotate=false;controls.enableDamping=false;controls.update(0);
+  camera.position.copy(saved.position);controls.target.copy(saved.target);camera.lookAt(controls.target);controls.update(0);
+  camera.position.copy(saved.position);controls.target.copy(saved.target);camera.lookAt(controls.target);
+  controls.autoRotate=saved.autoRotate;controls.enabled=saved.enabled;controls.enableDamping=saved.damping;
+  controls.maxDistance=saved.maxDistance;camera.far=saved.far;
+  cloudTime=saved.cloudTime;updateCloudAnimation();updatePeakLabels.next=0;
+  $('#gpxPlayButton').textContent=gpxPlayer.playing?'❚❚ Pause':'▶ Animer';$('#rotateButton').classList.toggle('active',saved.autoRotate);setPlaybackStatus(saved.playbackStatus);
+  renderer.setPixelRatio(saved.dpr);exportSettings=null;resize();lockExportControls(false);clock.getDelta();
 }
 function drawExportLabels(){
   const ctx=exportContext,w=exportCanvas.width,h=exportCanvas.height,scale=h/1080;
@@ -971,4 +1033,21 @@ function drawExportLabels(){
     ctx.fillStyle='#fff';ctx.fillText(text,x,y);
   });
   ctx.textAlign='right';ctx.font=`${13*scale}px sans-serif`;ctx.fillStyle='#fff';ctx.fillText('Relief : Mapzen / AWS · Imagerie : Esri World Imagery',w-20*scale,h-20*scale);
+}
+
+function fitTerrainShadows(){
+  if(!blocks.length)return;
+  scene.updateMatrixWorld(true);
+  const bounds=new THREE.Box3();
+  blocks.forEach(block=>{bounds.expandByObject(block.group.userData.top);bounds.expandByObject(block.group.userData.side);});
+  const center=bounds.getCenter(new THREE.Vector3()),size=bounds.getSize(new THREE.Vector3());
+  const az=THREE.MathUtils.degToRad(globalSettings.sunAzimuth),el=THREE.MathUtils.degToRad(globalSettings.sunElevation);
+  const distance=Math.max(48,size.length()*1.6);
+  sun.target.position.copy(center);sun.position.copy(center).add(new THREE.Vector3(Math.sin(az)*Math.cos(el),Math.sin(el),Math.cos(az)*Math.cos(el)).multiplyScalar(distance));
+  sun.target.updateMatrixWorld(true);sun.updateMatrixWorld(true);sun.shadow.updateMatrices(sun);
+  const lightBounds=new THREE.Box3();
+  for(const x of [bounds.min.x,bounds.max.x])for(const y of [bounds.min.y,bounds.max.y])for(const z of [bounds.min.z,bounds.max.z])lightBounds.expandByPoint(new THREE.Vector3(x,y,z).applyMatrix4(sun.shadow.camera.matrixWorldInverse));
+  const c=sun.shadow.camera,pad=1.5;
+  c.left=lightBounds.min.x-pad;c.right=lightBounds.max.x+pad;c.bottom=lightBounds.min.y-pad;c.top=lightBounds.max.y+pad;
+  c.near=Math.max(.1,-lightBounds.max.z-pad);c.far=-lightBounds.min.z+pad+Math.max(size.length(),size.y/Math.max(.05,Math.sin(el)));c.updateProjectionMatrix();sun.shadow.needsUpdate=true;
 }
