@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://services.arcgisonline.com" crossorigin>
   <link rel="preconnect" href="https://elevation-tiles-prod.s3.amazonaws.com" crossorigin>
   <link rel="stylesheet" href="styles.css?v=9">
-  <link rel="stylesheet" href="controls.css?v=9">
+  <link rel="stylesheet" href="controls.css?v=10">
   <script type="importmap">
     {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
@@ -24,12 +24,19 @@
   <main>
     <aside id="controlPanel" aria-label="Réglages">
       <div class="panel-heading"><div><span class="kicker">COMPOSITION</span><h1>Tes sommets</h1></div><button id="closePanelButton" class="icon-button close-button" aria-label="Fermer">×</button></div>
-      <section class="control-section">
-        <div class="section-title"><h2>Découpes affichées</h2><span id="selectedCount">2 / 3</span></div>
+      <div class="panel-section-actions" aria-label="Affichage des sections">
+        <button id="expandSections" type="button" class="secondary">Tout déplier</button>
+        <button id="collapseSections" type="button" class="secondary">Tout replier</button>
+      </div>
+      <details class="control-section panel-section" data-panel-section id="peaksSection">
+        <summary class="section-title"><h2>Découpes affichées</h2><span id="selectedCount">2 / 3</span></summary>
+        <div class="section-body">
         <div id="peakList" class="peak-list"></div><button id="addPeakButton" class="secondary wide">＋ Ajouter par coordonnées</button>
-      </section>
-      <section class="control-section">
-        <div class="section-title"><h2>Rendu physique</h2><span class="live-dot">LIVE</span></div>
+        </div>
+      </details>
+      <details class="control-section panel-section" data-panel-section id="renderSection">
+        <summary class="section-title"><h2>Rendu physique</h2><span class="live-dot">LIVE</span></summary>
+        <div class="section-body">
         <label class="select-label"><span>Qualité du relief et des textures</span><select id="qualitySelect"><option value="balanced">Équilibrée</option><option value="high" selected>Haute</option><option value="ultra">Ultra — PC puissant</option></select></label>
         <label class="range-label"><span>Lissage du relief <output id="terrainSmoothingValue">35 %</output></span><input id="terrainSmoothing" type="range" min="0" max="1" step="0.05" value="0.35"></label>
         <p class="control-hint">Correction des anomalies isolées toujours active. Le lissage adoucit les petites irrégularités ; une valeur élevée atténue aussi les détails réels.</p>
@@ -43,9 +50,11 @@
         <label class="toggle-row"><span><b>Ombres du relief</b><small>Éclairage cinématique</small></span><input id="shadowToggle" type="checkbox" checked></label>
         <label class="select-label"><span>Texture du sol</span><select id="groundTexture"><option value="marble">Marbre blanc veiné</option><option value="dark-marble">Marbre noir</option><option value="slate">Ardoise alpine</option><option value="wood">Bois de refuge</option><option value="studio">Studio mat</option></select></label>
         <button id="resetCameraButton" class="secondary wide">Recentrer la composition</button>
-      </section>
-      <section class="control-section" id="blockEditorSection">
-        <div class="section-title"><h2>Bloc individuel</h2><span>PAR SOMMET</span></div>
+        </div>
+      </details>
+      <details class="control-section panel-section" data-panel-section id="blockEditorSection">
+        <summary class="section-title"><h2>Bloc individuel</h2><span>PAR SOMMET</span></summary>
+        <div class="section-body">
         <label class="select-label"><span>Sommet à modifier</span><select id="blockPeakSelect"></select></label>
         <label class="range-label"><span>Diamètre <output id="blockDiameterValue">12 km</output></span><input id="blockDiameter" type="range" min="6" max="22" value="12" step="1"></label>
         <label class="range-label"><span>Rotation individuelle <output id="blockRotationValue">0°</output></span><input id="blockRotation" type="range" min="-180" max="180" value="0" step="1"></label>
@@ -61,9 +70,11 @@
 <label class="range-label" hidden><span>Panneau · hauteur <output id="statsYValue"></output></span><input id="statsY" type="range" min="-20" max="20" value="0" step="0.1"></label>
 <label class="range-label"><span>Carnet · avant / arrière <output id="statsZValue"></output></span><input id="statsZ" type="range" min="-20" max="20" value="0" step="0.1"></label>
 <button id="resetStatsPosition" class="secondary wide">Replacer le carnet devant la montagne</button>
-      </section>
-      <section class="control-section">
-        <div class="section-title"><h2>Nuages</h2><span>ATMOSPHÈRE</span></div>
+        </div>
+      </details>
+      <details class="control-section panel-section" data-panel-section id="cloudsSection">
+        <summary class="section-title"><h2>Nuages</h2><span>ATMOSPHÈRE</span></summary>
+        <div class="section-body">
         <label class="toggle-row"><span><b>Afficher les nuages</b><small>Nuages réellement répartis en profondeur</small></span><input id="cloudToggle" type="checkbox" checked></label>
         <label class="select-label"><span>Type de nuages</span><select id="cloudType"><option value="cumulus">Cumulus · volumes cotonneux</option><option value="stratus">Stratus · nappes basses</option><option value="cirrus">Cirrus · voiles étirés</option><option value="cumulonimbus">Cumulonimbus · tours et enclumes</option><option value="mixed">Mélange de nuages</option></select></label>
         <label class="range-label"><span>Altitude des nuages <output id="cloudHeightValue">2600 m</output></span><input id="cloudHeight" type="range" min="100" max="8000" step="100" value="2600"></label>
@@ -75,14 +86,16 @@
         <label class="range-label"><span>Opacité <output id="cloudOpacityValue">70 %</output></span><input id="cloudOpacity" type="range" min="0.15" max="1" value="0.7" step="0.05"></label>
         <label class="range-label"><span>Taille <output id="cloudSizeValue">1,0×</output></span><input id="cloudSize" type="range" min="0.4" max="2" value="1" step="0.1"></label>
         <button id="randomizeClouds" class="secondary wide">↻ Nouvelle répartition des nuages</button>
-      </section>
-      <section class="control-section">
-        <div class="section-title"><h2>Parcours GPX</h2></div>
+        </div>
+      </details>
+      <details class="control-section panel-section" data-panel-section id="gpxSection">
+        <summary class="section-title"><h2>Parcours GPX</h2></summary>
+        <div class="section-body">
         <label class="drop-zone" id="dropZone" for="gpxInput"><span class="upload-icon">⌁</span><b>Déposer ou choisir un GPX</b><small>Le parcours rejoint automatiquement sa montagne</small></label>
         <input id="gpxInput" type="file" accept=".gpx,application/gpx+xml" hidden><div id="gpxStats" class="gpx-stats">Aucun parcours importé</div>
         <label class="color-label"><span>Couleur du tracé · sommet actif</span><input id="gpxColor" type="color" value="#e76f32"></label>
         <label class="range-label"><span>Épaisseur du GPX <output id="gpxWidthValue">4 px</output></span><input id="gpxWidth" type="range" min="1" max="16" step="0.5" value="4"></label>
-        <label class="toggle-row"><span><b>Compteurs discrets</b><small>Texte blanc fixe · parcours suivi</small></span><input id="gpxLiveStats" type="checkbox"></label>
+        <label class="toggle-row"><span><b>Afficher les infos près du point</b><small>Altitude · D+ · distance · texte blanc</small></span><input id="gpxLiveStats" type="checkbox" checked></label>
         <p class="control-hint">Épaisseur de référence à 1080p. Distance et D+ depuis le début du tracé visible sur cette montagne. Altitude issue du GPX, ou du relief si absente ; D+ indisponible sans altitudes GPX.</p>
         <label class="select-label"><span>Montagne suivie par la caméra</span><select id="gpxTarget" disabled><option>Aucun parcours</option></select></label>
         <div class="gpx-player"><button id="gpxPlayButton" class="primary" disabled>▶ Animer</button><label class="toggle-row compact"><span><b>Caméra suiveuse</b></span><input id="gpxFollowToggle" type="checkbox" checked></label></div>
@@ -109,10 +122,16 @@
           <p id="storyStatus" class="control-hint" role="status">Importe un GPX pour placer des étapes.</p>
           <p class="control-hint">Les étapes suivent l’ordre du parcours. Les pauses, orbites et labels sont inclus dans « GPX complet » à l’export. Réimporte le même GPX pour retrouver tes étapes sauvegardées.</p>
         </details>
-      </section>
-      <section class="control-section"><details><summary>Statistiques du sommet actif</summary><div class="stats-grid"><label>Distance (km)<input id="distance" type="number" min="0" step="0.1"></label><label>D+ (m)<input id="gain" type="number" min="0"></label><label>Durée<input id="duration" placeholder="6 h 30"></label><label>Date<input id="date" type="date"></label></div><label>Notes<textarea id="notes" rows="3"></textarea></label><button id="saveButton" class="primary wide">Enregistrer sur cet appareil</button></details></section>
-      <section class="control-section" id="cinemaSection">
-        <div class="section-title"><h2>Outils caméra</h2><span id="sequenceTotal">0 plans</span></div>
+        </div>
+      </details>
+      <details class="control-section panel-section" data-panel-section id="statsSection">
+        <summary class="section-title"><h2>Statistiques du sommet actif</h2></summary>
+        <div class="section-body"><div class="stats-grid"><label>Distance (km)<input id="distance" type="number" min="0" step="0.1"></label><label>D+ (m)<input id="gain" type="number" min="0"></label><label>Durée<input id="duration" placeholder="6 h 30"></label><label>Date<input id="date" type="date"></label></div><label>Notes<textarea id="notes" rows="3"></textarea></label><button id="saveButton" class="primary wide">Enregistrer sur cet appareil</button>
+        </div>
+      </details>
+      <details class="control-section panel-section" data-panel-section id="cinemaSection">
+        <summary class="section-title"><h2>Outils caméra</h2><span id="sequenceTotal">0 plans</span></summary>
+        <div class="section-body">
         <label class="select-label"><span>Mouvement</span><select id="shotType"><option value="orbit">Orbite autour d’une montagne</option><option value="transfer">Liaison entre deux montagnes</option></select></label>
         <label class="select-label"><span>Montagne de départ</span><select id="shotFrom"></select></label>
         <label class="select-label" id="shotToRow" hidden><span>Montagne d’arrivée</span><select id="shotTo"></select></label>
@@ -126,9 +145,11 @@
         <button id="sequencePlay" class="primary wide">Lire la composition</button>
         <button id="cinemaPause" class="secondary">Pause</button><button id="cinemaStop" class="secondary">Arrêter</button>
         <p id="cinemaStatus" class="control-hint" role="status">Prêt · composition sauvegardée sur cet appareil</p>
-      </section>
-      <section class="control-section">
-        <div class="section-title"><h2>Export vidéo</h2></div>
+        </div>
+      </details>
+      <details class="control-section panel-section" data-panel-section id="exportSection">
+        <summary class="section-title"><h2>Export vidéo</h2></summary>
+        <div class="section-body">
         <fieldset id="exportOptions" style="border:0;padding:0;margin:0">
           <label class="select-label"><span>Résolution</span><select id="exportResolution"><option value="1080p">1080p</option><option value="4k">4K UHD</option></select></label>
           <label class="select-label"><span>Orientation</span><select id="exportOrientation"><option value="landscape">Paysage · 16:9</option><option value="portrait">Vertical · 9:16</option></select></label>
@@ -141,7 +162,8 @@
         <button id="exportStart" class="primary wide">Calculer et exporter la vidéo</button>
         <p id="exportStatus" class="control-hint" role="status">Rendu image par image · MP4 ou WebM selon les encodeurs disponibles.</p>
         <a id="exportDownload" class="secondary wide" hidden>Télécharger la vidéo</a>
-      </section>
+        </div>
+      </details>
       <footer class="sources">Relief : Mapzen Terrain Tiles / AWS · Imagerie : Esri World Imagery</footer>
     </aside>
     <div id="panelScrim"></div>
@@ -165,6 +187,7 @@
     addEventListener('error',event=>{if(/WebGL|context/i.test(event.message||'')){const loading=document.getElementById('loadingPanel'),panel=document.getElementById('errorPanel');if(loading)loading.hidden=true;if(panel){panel.hidden=false;panel.textContent='La 3D WebGL est désactivée dans ce navigateur. Active l’accélération graphique ou ouvre cette page dans Chrome, Firefox ou Safari récent.'}}});
   </script>
   <script type="module" src="peak-dialog.mjs?v=9"></script>
-  <script type="module" src="app.js?v=9"></script>
+  <script type="module" src="panel-sections.mjs?v=10"></script>
+  <script type="module" src="app.js?v=10"></script>
 </body>
 </html>

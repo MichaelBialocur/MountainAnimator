@@ -21,14 +21,32 @@ test('GPX distance widens the camera smoothly during approach and following, and
  const saved=JSON.parse(app.window.localStorage.getItem('mountainAnimatorProjectV3'));near(saved.globalSettings.gpxFollowDistance,4);const restored=appHarness(saved);near(restored.globalSettings.gpxFollowDistance,4);restored.dom.window.close();app.dom.window.close();
 });
 
-test('live GPX text stays in the same screen corner across zooms and route progress',()=>{
- const app=appHarness(),block=app.syntheticBlock();app.gpxTrack=routePoints();app.buildGpxRoutes();block.config.gpxLiveStats=true;app.setGpxProgress(.5);
+test('plain GPX counters follow the dot at a stable offset, stay readable and ignore terrain depth',()=>{
+ const app=appHarness(),block=app.syntheticBlock();app.gpxTrack=routePoints();app.buildGpxRoutes();app.setGpxProgress(.5);
  const route=block.group.userData.route;app.camera.position.set(0,14,26);app.controls.target.set(0,2,0);app.camera.lookAt(app.controls.target);app.updateLiveStats();
+ assert.equal(route.liveLabel.visible,true);
  assert.equal(route.liveLabel.material.depthTest,false);assert.equal(route.liveLabel.material.depthWrite,false);assert.equal(route.liveLabel.material.fog,false);assert.ok(route.liveLabel.renderOrder>100);
  const words=route.liveCanvas.getContext('2d').text;for(const label of ['Altitude','Dénivelé +','Distance'])assert.ok(words.some(text=>text.startsWith(label)));
+ const screen=obj=>{const p=obj.getWorldPosition(new THREE.Vector3()).project(app.camera);return {x:(p.x+1)*600,y:(1-p.y)*375};};
+ const checkOffset=()=>{const p=screen(route.liveLabel),dot=screen(route.cursor);near(p.x-dot.x,12+185/2);near(dot.y-p.y,12+185*320/720/2);return p;};
  const projectedWidth=()=>{const center=route.liveLabel.getWorldPosition(new THREE.Vector3()),depth=-center.clone().applyMatrix4(app.camera.matrixWorldInverse).z;return route.liveLabel.scale.x/depth/(2*Math.tan(THREE.MathUtils.degToRad(app.camera.fov)/2))*750;};
- near(projectedWidth(),185);const originalScreen=route.liveLabel.getWorldPosition(new THREE.Vector3()).project(app.camera);app.setGpxProgress(.9);app.camera.position.multiplyScalar(3);app.camera.lookAt(app.controls.target);app.updateLiveStats();near(projectedWidth(),185);
- const p=route.liveLabel.getWorldPosition(new THREE.Vector3()).project(app.camera);near(p.x,originalScreen.x);near(p.y,originalScreen.y);assert.ok(Math.abs(p.x)+185/1200<1);assert.ok(Math.abs(p.y)+(185*320/720)/750<1);app.dom.window.close();
+ near(projectedWidth(),185);const original=checkOffset();app.setGpxProgress(.9);app.updateLiveStats();assert.ok(Math.abs(checkOffset().x-original.x)>1);
+ app.camera.position.multiplyScalar(3);app.camera.lookAt(app.controls.target);app.updateLiveStats();near(projectedWidth(),185);checkOffset();
+ // At the viewport edge, continuous clamping cannot jump from right to left.
+ let previous=null;
+ for(let x=0;x<180;x+=.2){route.cursor.position.x=x;app.updateLiveStats();if(!route.liveLabel.visible)break;const p=screen(route.liveLabel);assert.ok(p.x+185/2<=1192.001);if(previous!==null)assert.ok(p.x>=previous-1e-6&&p.x-previous<8);previous=p.x;}
+ assert.equal(route.liveLabel.visible,false);app.dom.window.close();
+});
+
+test('counter toggle defaults on for old projects, persists off and is independent of the edited mountain',()=>{
+ const app=appHarness({blockSettings:{chavalard:{gpxLiveStats:false}}});const block=app.syntheticBlock();app.syntheticBlock('lagginhorn',8.00310);app.gpxTrack=routePoints();app.buildGpxRoutes();
+ const toggle=app.window.document.querySelector('#gpxLiveStats');assert.equal(toggle.checked,true);assert.equal(app.globalSettings.showGpxStats,true);
+ toggle.checked=false;toggle.dispatchEvent(new app.window.Event('change'));assert.equal(block.group.userData.route.liveLabel.visible,false);
+ input(app,'blockPeakSelect','lagginhorn','change');assert.equal(toggle.checked,false);
+ const saved=JSON.parse(app.window.localStorage.getItem('mountainAnimatorProjectV3'));assert.equal(saved.globalSettings.showGpxStats,false);
+ const restored=appHarness(saved);assert.equal(restored.globalSettings.showGpxStats,false);assert.equal(restored.window.document.querySelector('#gpxLiveStats').checked,false);
+ toggle.checked=true;toggle.dispatchEvent(new app.window.Event('change'));assert.equal(app.globalSettings.showGpxStats,true);
+ app.dom.window.close();restored.dom.window.close();
 });
 
 test('GPX parsing preserves recording breaks, missing elevations and namespaced elements',()=>{

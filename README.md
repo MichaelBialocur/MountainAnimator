@@ -182,7 +182,7 @@ elles ne remplacent pas une vérification visuelle avec un GPU compatible.
 
 Les compteurs du parcours suivi sont trois lignes blanches sans fond ni cadre,
 avec un léger contour sombre pour rester lisibles sur la neige. Ils gardent la
-même position en bas à gauche, quel que soit le zoom ou le côté de la trace.
+même position en bas à gauche dans la V9 ; la V10 ci-dessous les replace près du point.
 
 Dans **Parcours GPX → Étapes et narration du GPX** :
 
@@ -218,3 +218,19 @@ reprise du parcours, sauvegarde liée au GPX, rotation du bloc, modification/sup
 texte fixe à l’écran et export avec restitution d’une étape mise en pause. Les
 textures de texte ont été rendues et inspectées sur canvas ; les tests automatisés
 utilisent les géométries Three.js avec un renderer de substitution.
+
+
+## V10 — Compteurs près du point et menu repliable
+
+Dans **Parcours GPX → Afficher les infos près du point**, affiche ou masque
+l’altitude, le dénivelé positif et la distance en texte blanc sans panneau.
+Activé par défaut, ce choix est ensuite sauvegardé. Il concerne le parcours
+suivi, indépendamment du bloc sélectionné pour les réglages. Les chiffres
+suivent le point avec un décalage constant ; aux bords, leur position est limitée
+sans basculer brusquement de côté. Le terrain ne les masque pas. Ils font partie
+du rendu vidéo image par image et disparaissent si le point sort du champ.
+
+Toutes les sections du menu démarrent repliées. Clique sur un en-tête pour
+ouvrir uniquement les réglages utiles, ou sur **Tout déplier / Tout replier**.
+Le repli conserve les valeurs saisies. Le choix d’une étape directement sur
+le tracé rouvre automatiquement la section GPX et son éditeur de narration.

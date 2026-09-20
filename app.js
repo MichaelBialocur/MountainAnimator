@@ -34,7 +34,7 @@ const TILE_CACHE = new Map();
 const $ = selector => document.querySelector(selector);
 
 const globalSettings = {
-  storyEnabled:true, gpxFollowDistance:1.6, terrainSmoothing:.35, quality:'high', exaggeration:1, brightness:1.25,
+  showGpxStats:true, storyEnabled:true, gpxFollowDistance:1.6, terrainSmoothing:.35, quality:'high', exaggeration:1, brightness:1.25,
   sunAzimuth:315, sunElevation:38, sunIntensity:3.2,
   clouds:true, cloudDensity:8, cloudDetail:2, cloudOpacity:.7, cloudSize:1,
   cloudType:'cumulus', cloudHeight:2600, cloudSpread:900, cloudCumulonimbus:20, cloudCumulus:60, cloudStratus:25, cloudCirrus:15, fillLight:.55, shadows:true, groundTexture:'marble', cloudSeed:1
@@ -110,7 +110,7 @@ const clock = new THREE.Clock();
 requestAnimationFrame(animate);
 
 function defaultBlockSettings(){
-  return { gpxWidth:4, gpxLiveStats:false, notebookLayout:1, snowCoverage:.68, snowEnabled:false, snowAltitude:2800, statsX:0, statsY:0, statsZ:0, diameter:12, centerEast:0, centerNorth:0, rotation:0, gpxColor:'#e76f32', comment:'', showStats:true, manualDistance:'', manualGain:'', manualDuration:'', manualDate:'', manualNotes:'' };
+  return { gpxWidth:4, notebookLayout:1, snowCoverage:.68, snowEnabled:false, snowAltitude:2800, statsX:0, statsY:0, statsZ:0, diameter:12, centerEast:0, centerNorth:0, rotation:0, gpxColor:'#e76f32', comment:'', showStats:true, manualDistance:'', manualGain:'', manualDuration:'', manualDate:'', manualNotes:'' };
 }
 
 function settingsFor(id){
@@ -194,6 +194,7 @@ function renderPeakList(){
 }
 
 function syncBlockEditor(){
+  $('#gpxLiveStats').checked=globalSettings.showGpxStats;
   const list=activePeaks(), section=$('#blockEditorSection'), select=$('#blockPeakSelect');
   section.hidden=!list.length;
   if(!list.length) return;
@@ -202,7 +203,7 @@ function syncBlockEditor(){
   const config=settingsFor(editorPeakId);
   $('#blockDiameter').value=config.diameter; $('#blockDiameterValue').value=`${config.diameter} km`;
   $('#blockRotation').value=config.rotation;$('#blockRotationValue').value=`${config.rotation}°`;
-  $('#gpxColor').value=config.gpxColor;$('#gpxWidth').value=config.gpxWidth;$('#gpxWidthValue').value=`${config.gpxWidth} px`;$('#gpxLiveStats').checked=config.gpxLiveStats;
+  $('#gpxColor').value=config.gpxColor;$('#gpxWidth').value=config.gpxWidth;$('#gpxWidthValue').value=`${config.gpxWidth} px`;
   for(const key of ['snowAltitude','snowCoverage','statsX','statsY','statsZ']){$('#'+key).value=config[key];$('#'+key+'Value').value=key==='snowCoverage'?`${Math.round(config[key]*100)} %`:config[key]+(key==='snowAltitude'?' m':' km');}
   $('#snowEnabled').checked=config.snowEnabled;
   syncOffsetLimits(config);
@@ -826,6 +827,7 @@ function applyLighting(){
 function bindControls(){
   bindCinemaControls();bindStoryControls();
   bindRange('gpxFollowDistance','gpxFollowDistanceValue',v=>`${v.toFixed(1).replace('.',',')}×`,v=>{
+    if(typeof globalSettings.showGpxStats!=='boolean')globalSettings.showGpxStats=true;
     globalSettings.gpxFollowDistance=clamp(v,.6,4);
     // Retarget an approach from its current pose; steady following uses damping.
     if(gpxPlayer.follow&&gpxPlayer.transition&&['intro','scrub'].includes(gpxPlayer.phase)){
@@ -837,7 +839,7 @@ function bindControls(){
     globalSettings.terrainSmoothing=v;stopCinema();blocks.forEach(b=>{b.data.rawHeights??=b.data.heights.slice();const result=cleanTerrain(b.data.rawHeights,b.data.grid,b.data.size*1000/b.data.grid,v);b.data.heights=result.heights;b.data.repaired=result.repaired;});updateVerticalScale();
   });
   $('#gpxWidth').addEventListener('input',e=>{const config=settingsFor(editorPeakId);config.gpxWidth=+e.target.value;$('#gpxWidthValue').value=`${config.gpxWidth} px`;updateRouteStyle();saveProject();});
-  $('#gpxLiveStats').addEventListener('change',e=>{settingsFor(editorPeakId).gpxLiveStats=e.target.checked;updateLiveStats();saveProject();});
+  $('#gpxLiveStats').addEventListener('change',e=>{globalSettings.showGpxStats=e.target.checked;updateLiveStats();saveProject();});
 
   bindRange('fillLight','fillLightValue',v=>v.toFixed(2),v=>{globalSettings.fillLight=v;applyLighting();});
   bindRange('cloudHeight','cloudHeightValue',v=>`${v} m`,v=>{globalSettings.cloudHeight=v;refreshClouds();});
@@ -942,6 +944,7 @@ function restoreProject(){
     if(Array.isArray(saved.cameraShots))cameraShots=saved.cameraShots.slice(0,30).filter(s=>['orbit','transfer'].includes(s.type));
     if(Array.isArray(saved.customPeaks))peaks=[...PEAKS,...saved.customPeaks];if(Array.isArray(saved.selected))selected=saved.selected.filter(id=>peaks.some(peak=>peak.id===id)).slice(0,MAX_PEAKS);Object.assign(globalSettings,saved.globalSettings||{});if(!QUALITY[globalSettings.quality])globalSettings.quality='high';
     if(!GROUND_KINDS.includes(globalSettings.groundTexture))globalSettings.groundTexture='marble';
+    if(typeof globalSettings.showGpxStats!=='boolean')globalSettings.showGpxStats=true;
     globalSettings.gpxFollowDistance=clamp(Number(globalSettings.gpxFollowDistance)||1.6,.6,4);
     if(!Number.isFinite(globalSettings.cloudSeed))globalSettings.cloudSeed=1;
     Object.entries(saved.blockSettings||{}).forEach(([id,value])=>{const config={...defaultBlockSettings(),...value};if(!value.notebookLayout){config.statsX=0;config.statsY=0;config.statsZ=0;}config.gpxWidth=clamp(Number(config.gpxWidth)||4,1,16);config.rotation=clamp(Number(config.rotation)||0,-180,180);if(!/^#[0-9a-f]{6}$/i.test(config.gpxColor))config.gpxColor='#e76f32';blockSettings.set(id,config);});editorPeakId=selected[0]||'';
@@ -1137,11 +1140,18 @@ function updateLiveStats(){
   const unit=exportSettings?height/1080:1,w=Math.min(185*unit,width*.47),h=w*320/720;
   blocks.forEach(block=>{
     const route=block.group.userData.route;if(!route)return;
-    route.liveLabel.visible=block.config.gpxLiveStats&&block===gpxPlayer.routeBlock;if(!route.liveLabel.visible)return;
+    route.liveLabel.visible=globalSettings.showGpxStats&&block===gpxPlayer.routeBlock;if(!route.liveLabel.visible)return;
+    const anchor=route.cursor.getWorldPosition(new THREE.Vector3()).project(camera);
+    // Keep the text beside the dot; never flip sides when it nears an edge.
+    // An offscreen/behind-camera cursor must not leave unrelated counters onscreen.
+    if(anchor.z < -1 || anchor.z > 1 || Math.abs(anchor.x)>1 || Math.abs(anchor.y)>1){route.liveLabel.visible=false;return;}
     const metrics=routeMetrics(route.motion,gpxPlayer.progress*route.motion.total,globalSettings.exaggeration);
     const text=`${Math.round(metrics.altitude)}|D+ ${metrics.gain===null?'—':Math.round(metrics.gain)}|${metrics.distance.toFixed(2)}`;
     if(route.liveText!==text){paintLiveGpxCard(route.liveCanvas,metrics);route.liveTexture.needsUpdate=true;route.liveText=text;}
-    placeOverlay(route.liveLabel,block,14*unit+w/2,height-34*unit-h/2,w,h,width,height);
+    const margin=8*unit,gap=12*unit;
+    const x=clamp((anchor.x+1)*width/2+gap+w/2,margin+w/2,width-margin-w/2);
+    const y=clamp((1-anchor.y)*height/2-gap-h/2,margin+h/2,height-margin-h/2);
+    placeOverlay(route.liveLabel,block,x,y,w,h,width,height);
   });
 }
 
@@ -1279,7 +1289,7 @@ function bindStoryControls(){
     const hit=ray.intersectObject(block.group.userData.top)[0];if(!hit){showError('Touche la trace sur la montagne suivie.');return;}
     const closest=nearestRoutePoint(block.group.userData.route.motion,block.group.worldToLocal(hit.point.clone()),gpxPlayer.progress);
     if(!closest||closest.error>Math.max(.15,block.data.size*.025)){showError('Touche plus près du tracé GPX.');return;}
-    setGpxProgress(closest.progress);$('#storyPosition').value=(closest.progress*100).toFixed(4);cancelStoryPick();setPanel(true);$('#storyEditor').open=true;$('#storyName').focus();
+    setGpxProgress(closest.progress);$('#storyPosition').value=(closest.progress*100).toFixed(4);cancelStoryPick();setPanel(true);$('#gpxSection').open=true;$('#storyEditor').open=true;$('#storyName').focus();
   });
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&storyPicking)cancelStoryPick();});renderStoryEditor();
 }

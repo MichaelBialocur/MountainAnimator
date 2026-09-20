@@ -63,5 +63,5 @@ test('a tap on the terrain route sets the pin position; a drag does not place a 
  app.camera.position.copy(point).add(new THREE.Vector3(0,12,20));app.controls.target.copy(point);app.camera.lookAt(point);app.camera.updateMatrixWorld(true);app.gpxPlayer.routeBlock.group.updateWorldMatrix(true,true);
  const click=(type,x,y)=>canvas.dispatchEvent(new app.window.MouseEvent(type,{clientX:x,clientY:y,button:0,bubbles:true}));
  app.window.document.querySelector('#storyPick').click();click('pointerdown',600,375);click('pointerup',650,375);assert.equal(canvas.style.cursor,'crosshair');
- click('pointerdown',600,375);click('pointerup',600,375);assert.equal(canvas.style.cursor,'');const value=+app.window.document.querySelector('#storyPosition').value;near(value,expected,.01);assert.equal(app.window.document.querySelector('#storyEditor').open,true);app.dom.window.close();
+ click('pointerdown',600,375);click('pointerup',600,375);assert.equal(canvas.style.cursor,'');const value=+app.window.document.querySelector('#storyPosition').value;near(value,expected,.01);assert.equal(app.window.document.querySelector('#gpxSection').open,true);assert.equal(app.window.document.querySelector('#storyEditor').open,true);app.dom.window.close();
 });
