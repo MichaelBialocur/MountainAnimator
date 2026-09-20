@@ -8,7 +8,7 @@ import { VideoExport, supportedVideoTypes, videoDimensions } from './video-expor
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { clamp, smootherstep, dampingAlpha, distanceKm, measureRoute, sampleRoute, smoothRoutePoint, clipToBounds, pointInOutline, interpolateGeo, routeMetrics } from './route-motion.mjs?v=7';
-import { paintGround, paintTravelNotebook, GROUND_KINDS } from './studio-art.mjs?v=7';
+import { paintGround, paintTravelNotebook, paintLiveGpxCard, GROUND_KINDS } from './studio-art.mjs?v=8';
 
 const PEAKS = [
   { id:'chavalard', name:'Grand Chavalard', elevation:2899, lat:46.17869, lon:7.11312, region:'Fully' },
@@ -33,7 +33,7 @@ const TILE_CACHE = new Map();
 const $ = selector => document.querySelector(selector);
 
 const globalSettings = {
-  terrainSmoothing:.35, quality:'high', exaggeration:1, brightness:1.25,
+  gpxFollowDistance:1.6, terrainSmoothing:.35, quality:'high', exaggeration:1, brightness:1.25,
   sunAzimuth:315, sunElevation:38, sunIntensity:3.2,
   clouds:true, cloudDensity:8, cloudDetail:2, cloudOpacity:.7, cloudSize:1,
   cloudType:'cumulus', cloudHeight:2600, cloudSpread:900, cloudCumulonimbus:20, cloudCumulus:60, cloudStratus:25, cloudCirrus:15, fillLight:.55, shadows:true, groundTexture:'marble', cloudSeed:1
@@ -665,8 +665,9 @@ function buildGpxRoutes(){
       if(Number.isFinite(a.ele)&&Number.isFinite(b.ele)){stats.gain+=Math.max(0,b.ele-a.ele);stats.hasElevation=true;}
       if(Number.isFinite(a.time)&&Number.isFinite(b.time))stats.duration+=Math.max(0,(b.time-a.time)/1000);
     });
-    const liveCanvas=document.createElement('canvas');liveCanvas.width=720;liveCanvas.height=160;const liveTexture=new THREE.CanvasTexture(liveCanvas);liveTexture.colorSpace=THREE.SRGBColorSpace;
-    const liveLabel=new THREE.Sprite(new THREE.SpriteMaterial({map:liveTexture,depthTest:true,depthWrite:false,toneMapped:false}));liveLabel.scale.set(1.6,.36,1);root.add(liveLabel);
+    const liveCanvas=document.createElement('canvas');liveCanvas.width=720;liveCanvas.height=480;const liveTexture=new THREE.CanvasTexture(liveCanvas);liveTexture.colorSpace=THREE.SRGBColorSpace;
+    const liveLabel=new THREE.Sprite(new THREE.SpriteMaterial({map:liveTexture,depthTest:false,depthWrite:false,toneMapped:false,fog:false}));
+    liveLabel.renderOrder=10000;liveLabel.frustumCulled=false;root.add(liveLabel);
     data.route={root,line,geometry,fatGeometry,material,cursor,motion,liveCanvas,liveTexture,liveLabel,partialIndex:-1};data.routeStats=stats;
     if(motion.total>bestLength){bestLength=motion.total;bestBlock=block;}
   });
@@ -753,7 +754,7 @@ function followPose(){
   if(!gpxPlayer.offset)captureFollowOffset();
   const point=smoothRoutePoint(route.motion,gpxPlayer.progress*route.motion.total,Math.max(.1,Math.min(.4,route.motion.total*.03)));
   const target=worldRoutePoint(block,point);target.y+=.08;
-  const position=target.clone().add(gpxPlayer.offset);position.y=safeCameraHeight(position);
+  const position=target.clone().addScaledVector(gpxPlayer.offset,globalSettings.gpxFollowDistance);position.y=safeCameraHeight(position);
   return {position,target};
 }
 
@@ -816,6 +817,14 @@ function applyLighting(){
 
 function bindControls(){
   bindCinemaControls();
+  bindRange('gpxFollowDistance','gpxFollowDistanceValue',v=>`${v.toFixed(1).replace('.',',')}×`,v=>{
+    globalSettings.gpxFollowDistance=clamp(v,.6,4);
+    // Retarget an approach from its current pose; steady following uses damping.
+    if(gpxPlayer.follow&&gpxPlayer.transition&&['intro','scrub'].includes(gpxPlayer.phase)){
+      const previous=gpxPlayer.transition;
+      beginCameraTransition(followPose(),Math.max(.6,previous.duration-previous.elapsed),gpxPlayer.phase,previous.onComplete);
+    }
+  });
   bindRange('terrainSmoothing','terrainSmoothingValue',v=>`${Math.round(v*100)} %`,v=>{
     globalSettings.terrainSmoothing=v;stopCinema();blocks.forEach(b=>{b.data.rawHeights??=b.data.heights.slice();const result=cleanTerrain(b.data.rawHeights,b.data.grid,b.data.size*1000/b.data.grid,v);b.data.heights=result.heights;b.data.repaired=result.repaired;});updateVerticalScale();
   });
@@ -924,6 +933,7 @@ function restoreProject(){
     if(Array.isArray(saved.cameraShots))cameraShots=saved.cameraShots.slice(0,30).filter(s=>['orbit','transfer'].includes(s.type));
     if(Array.isArray(saved.customPeaks))peaks=[...PEAKS,...saved.customPeaks];if(Array.isArray(saved.selected))selected=saved.selected.filter(id=>peaks.some(peak=>peak.id===id)).slice(0,MAX_PEAKS);Object.assign(globalSettings,saved.globalSettings||{});if(!QUALITY[globalSettings.quality])globalSettings.quality='high';
     if(!GROUND_KINDS.includes(globalSettings.groundTexture))globalSettings.groundTexture='marble';
+    globalSettings.gpxFollowDistance=clamp(Number(globalSettings.gpxFollowDistance)||1.6,.6,4);
     if(!Number.isFinite(globalSettings.cloudSeed))globalSettings.cloudSeed=1;
     Object.entries(saved.blockSettings||{}).forEach(([id,value])=>{const config={...defaultBlockSettings(),...value};if(!value.notebookLayout){config.statsX=0;config.statsY=0;config.statsZ=0;}config.gpxWidth=clamp(Number(config.gpxWidth)||4,1,16);config.rotation=clamp(Number(config.rotation)||0,-180,180);if(!/^#[0-9a-f]{6}$/i.test(config.gpxColor))config.gpxColor='#e76f32';blockSettings.set(id,config);});editorPeakId=selected[0]||'';
   }catch{}
@@ -1100,15 +1110,26 @@ function updateRouteStyle(){
 }
 function updateLiveStats(){
   camera.updateMatrixWorld(true);
-  const right=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,0),up=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,1);
+  const width=exportSettings?exportCanvas?.width||1920:stage.clientWidth,height=exportSettings?exportCanvas?.height||1080:stage.clientHeight;
+  if(!width||!height)return;
+  // Fixed readable screen size, also proportional to the output in 4K exports.
+  const unit=exportSettings?height/1080:1,cardWidth=Math.min(220*unit,width*.55),cardHeight=cardWidth*2/3,gap=14*unit,margin=8*unit;
   blocks.forEach(block=>{
     const route=block.group.userData.route;if(!route)return;
     route.liveLabel.visible=block.config.gpxLiveStats;if(!block.config.gpxLiveStats)return;
     const metrics=routeMetrics(route.motion,gpxPlayer.progress*route.motion.total,globalSettings.exaggeration);
-    const text=`${Math.round(metrics.altitude)} m   ·   D+ ${metrics.gain===null?'—':Math.round(metrics.gain)+' m'}   ·   ${metrics.distance.toFixed(2)} km`;
-    if(route.liveText!==text){const ctx=route.liveCanvas.getContext('2d');ctx.clearRect(0,0,720,160);ctx.fillStyle='rgba(29,43,39,.91)';ctx.fillRect(0,0,720,160);ctx.fillStyle='#f4ead6';ctx.font='600 35px sans-serif';ctx.textAlign='center';ctx.fillText(text,360,96,690);route.liveTexture.needsUpdate=true;route.liveText=text;}
-    const world=block.group.localToWorld(route.cursor.position.clone()).addScaledVector(right,1.0).addScaledVector(up,.3);
-    route.liveLabel.position.copy(block.group.worldToLocal(world));
+    const text=`${Math.round(metrics.altitude)}|D+ ${metrics.gain===null?'—':Math.round(metrics.gain)}|${metrics.distance.toFixed(2)}`;
+    if(route.liveText!==text){paintLiveGpxCard(route.liveCanvas,metrics);route.liveTexture.needsUpdate=true;route.liveText=text;}
+    const world=block.group.localToWorld(route.cursor.position.clone()),depth=-world.clone().applyMatrix4(camera.matrixWorldInverse).z,anchor=world.project(camera);
+    if(depth<=camera.near||depth>=camera.far){route.liveLabel.visible=false;return;}
+    const px=(anchor.x+1)*width/2,py=(1-anchor.y)*height/2;
+    const side=px+gap+cardWidth<=width-margin?1:-1;
+    const x=clamp(px+side*(gap+cardWidth/2),margin+cardWidth/2,width-margin-cardWidth/2);
+    const y=clamp(py-cardHeight*.25,margin+cardHeight/2,height-margin-cardHeight/2);
+    const center=new THREE.Vector3(x/width*2-1,1-y/height*2,anchor.z).unproject(camera);
+    route.liveLabel.position.copy(block.group.worldToLocal(center));
+    const worldPerPixel=2*depth*Math.tan(THREE.MathUtils.degToRad(camera.fov)/2)/height;
+    route.liveLabel.scale.set(cardWidth*worldPerPixel,cardHeight*worldPerPixel,1);
   });
 }
 function mountainCameraPose(id,spec={}){

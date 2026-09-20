@@ -163,3 +163,16 @@ Les tests couvrent les raccords de tuiles, pics/creux synthétiques, grandes cr�
 carnets au sol, traits épais, compteurs partiels, continuité des plans et restauration
 de l’éditeur après export. Les assertions de scène utilisent les géométries Three.js ;
 elles ne remplacent pas une vérification visuelle avec un GPU compatible.
+
+
+
+## V8 — recul GPX et fiche de progression
+
+- **Recul caméra GPX** : de 0,6× à 4×, avec 1,6× par défaut pour un cadrage
+  plus large. Le réglage est conservé localement et utilisé à l’export. Pendant le
+  suivi, le changement est amorti ; pendant l’approche, la transition repart de
+  la pose actuelle sans saut. Les orbites indépendantes ne sont pas modifiées.
+- **Compteurs près du point mobile** : fiche papier à bordure dorée et emblème alpin,
+  avec trois puces (altitude, dénivelé positif cumulé, distance). Taille lisible
+  indépendante du zoom, placement adapté aux bords de l’image et rendu au-dessus
+  du terrain et des nuages. La même fiche apparaît dans le rendu vidéo.

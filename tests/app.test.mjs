@@ -12,6 +12,25 @@ const near=(a,b,tolerance=1e-6)=>assert.ok(Math.abs(a-b)<tolerance,`${a} != ${b}
 const input=(app,id,value,type='input')=>{const node=app.window.document.querySelector('#'+id);node.value=value;node.dispatchEvent(new app.window.Event(type));};
 const tick=(app,seconds,dt=.05)=>{for(let t=0;t<seconds;t+=dt)app.advancePlayback(dt);};
 
+test('GPX distance widens the camera smoothly during approach and following, and persists',()=>{
+ const app=appHarness();app.syntheticBlock();app.gpxTrack=routePoints();app.buildGpxRoutes();app.camera.position.set(12,12,30);app.controls.target.set(0,2,0);
+ app.toggleGpxAnimation();tick(app,.5);const before=app.camera.position.clone(),target=app.controls.target.clone();
+ input(app,'gpxFollowDistance','3');assert.ok(app.camera.position.equals(before));assert.ok(app.controls.target.equals(target));tick(app,2.5);
+ const wide=app.followPose();input(app,'gpxFollowDistance','1');const nearPose=app.followPose();near(wide.position.distanceTo(wide.target),3*nearPose.position.distanceTo(nearPose.target));
+ const beforeChange=app.camera.position.clone();input(app,'gpxFollowDistance','4');assert.ok(app.camera.position.equals(beforeChange));app.advancePlayback(.05);assert.ok(app.gpxPlayer.playing);assert.ok(app.camera.position.distanceTo(beforeChange)<1);
+ const saved=JSON.parse(app.window.localStorage.getItem('mountainAnimatorProjectV3'));near(saved.globalSettings.gpxFollowDistance,4);const restored=appHarness(saved);near(restored.globalSettings.gpxFollowDistance,4);restored.dom.window.close();app.dom.window.close();
+});
+
+test('live GPX card is an overlay with three rows and keeps its screen size across zooms',()=>{
+ const app=appHarness(),block=app.syntheticBlock();app.gpxTrack=routePoints();app.buildGpxRoutes();block.config.gpxLiveStats=true;app.setGpxProgress(.5);
+ const route=block.group.userData.route;app.camera.position.set(0,14,26);app.controls.target.set(0,2,0);app.camera.lookAt(app.controls.target);app.updateLiveStats();
+ assert.equal(route.liveLabel.material.depthTest,false);assert.equal(route.liveLabel.material.depthWrite,false);assert.equal(route.liveLabel.material.fog,false);assert.ok(route.liveLabel.renderOrder>100);
+ const words=route.liveCanvas.getContext('2d').text;for(const label of ['Altitude','Dénivelé +','Distance'])assert.ok(words.includes(label));
+ const projectedWidth=()=>{const center=route.liveLabel.getWorldPosition(new THREE.Vector3()),depth=-center.clone().applyMatrix4(app.camera.matrixWorldInverse).z;return route.liveLabel.scale.x/depth/(2*Math.tan(THREE.MathUtils.degToRad(app.camera.fov)/2))*750;};
+ near(projectedWidth(),220);app.camera.position.multiplyScalar(3);app.camera.lookAt(app.controls.target);app.updateLiveStats();near(projectedWidth(),220);
+ const p=route.liveLabel.getWorldPosition(new THREE.Vector3()).project(app.camera);assert.ok(Math.abs(p.x)+220/1200<1);assert.ok(Math.abs(p.y)+(220*2/3)/750<1);app.dom.window.close();
+});
+
 test('GPX parsing preserves recording breaks, missing elevations and namespaced elements',()=>{
   const app=appHarness();
   const parsed=app.parseGpx('<g:gpx xmlns:g="urn:gpx"><g:trk><g:trkseg><g:trkpt lat="46" lon="7"/><g:trkpt lat="46.001" lon="7.001"/></g:trkseg><g:trkseg><g:trkpt lat="47" lon="8"/><g:trkpt lat="47.001" lon="8.001"/></g:trkseg></g:trk></g:gpx>');
@@ -173,6 +192,7 @@ test('travel notebooks sit on the floor in front of each block and stay there wh
 });
 test('fat GPX thickness and live metrics follow fractional progress without extra connecting segments',()=>{
  const app=appHarness(),block=app.syntheticBlock();app.gpxTrack=routePoints();app.buildGpxRoutes();
+ app.camera.position.set(0,14,26);app.camera.lookAt(0,2,0);
  input(app,'gpxWidth','9');const route=block.group.userData.route;near(route.material.linewidth,9*750/1080);
  const toggle=app.window.document.querySelector('#gpxLiveStats');toggle.checked=true;toggle.dispatchEvent(new app.window.Event('change'));
  app.setGpxProgress(.25);assert.ok(route.liveLabel.visible);assert.match(route.liveText,/D\+/);const old=route.liveText;app.setGpxProgress(.75);assert.notEqual(route.liveText,old);

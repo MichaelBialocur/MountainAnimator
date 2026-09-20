@@ -3,6 +3,30 @@ export function seededRandom(seed) {
   return () => { seed=(seed*1664525+1013904223)>>>0; return seed/4294967296; };
 }
 
+// Screen-facing route card: parchment, forest-green ink and brass edging.
+export function paintLiveGpxCard(canvas,metrics){
+  const ctx=canvas.getContext('2d');ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.save();ctx.scale(canvas.width/720,canvas.height/480);
+  const round=(x,y,w,h,r)=>{ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();};
+  ctx.shadowColor='rgba(8,20,16,.35)';ctx.shadowBlur=18;ctx.shadowOffsetY=7;
+  round(18,14,684,440,26);ctx.fillStyle='#f2e7cc';ctx.fill();ctx.shadowColor='transparent';
+  ctx.strokeStyle='#ae8b50';ctx.lineWidth=3;ctx.stroke();
+  round(31,27,658,414,18);ctx.strokeStyle='rgba(95,102,74,.4)';ctx.lineWidth=1.5;ctx.stroke();
+  // Small mountain emblem, with a fine rule that keeps the rows distinct.
+  ctx.strokeStyle='#3d594a';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(53,92);ctx.lineTo(76,55);ctx.lineTo(91,78);ctx.lineTo(108,48);ctx.lineTo(140,92);ctx.stroke();
+  ctx.fillStyle='#3d594a';ctx.font='600 25px sans-serif';ctx.textAlign='left';ctx.fillText('AU FIL DU PARCOURS',165,82);
+  ctx.strokeStyle='#b29b6e';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(52,114);ctx.lineTo(667,114);ctx.stroke();
+  const number=n=>Math.round(n).toLocaleString('fr-CH');
+  const rows=[['Altitude',`${number(metrics.altitude)} m`],['Dénivelé +',metrics.gain===null?'—':`${number(metrics.gain)} m`],['Distance',`${metrics.distance.toFixed(2).replace('.',',')} km`]];
+  rows.forEach(([label,value],i)=>{const y=180+i*96;
+    ctx.fillStyle='#ae8546';ctx.beginPath();ctx.arc(65,y-12,6,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#4f6252';ctx.font='31px sans-serif';ctx.textAlign='left';ctx.fillText(label,89,y);
+    ctx.fillStyle='#233c30';ctx.font='600 38px Georgia, serif';ctx.textAlign='right';ctx.fillText(value,657,y,330);
+    if(i<2){ctx.strokeStyle='rgba(143,129,92,.23)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(89,y+32);ctx.lineTo(657,y+32);ctx.stroke();}
+  });
+  ctx.restore();return canvas;
+}
+
 function lattice(x,y,seed) {
   let n=Math.imul(x,374761393)^Math.imul(y,668265263)^seed;
   n=Math.imul(n^(n>>>13),1274126177);

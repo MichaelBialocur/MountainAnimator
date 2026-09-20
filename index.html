@@ -9,8 +9,8 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://services.arcgisonline.com" crossorigin>
   <link rel="preconnect" href="https://elevation-tiles-prod.s3.amazonaws.com" crossorigin>
-  <link rel="stylesheet" href="styles.css?v=7">
-  <link rel="stylesheet" href="controls.css?v=7">
+  <link rel="stylesheet" href="styles.css?v=8">
+  <link rel="stylesheet" href="controls.css?v=8">
   <script type="importmap">
     {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
@@ -86,6 +86,8 @@
         <p class="control-hint">Épaisseur de référence à 1080p. Distance et D+ depuis le début du tracé visible sur cette montagne. Altitude issue du GPX, ou du relief si absente ; D+ indisponible sans altitudes GPX.</p>
         <label class="select-label"><span>Montagne suivie par la caméra</span><select id="gpxTarget" disabled><option>Aucun parcours</option></select></label>
         <div class="gpx-player"><button id="gpxPlayButton" class="primary" disabled>▶ Animer</button><label class="toggle-row compact"><span><b>Caméra suiveuse</b></span><input id="gpxFollowToggle" type="checkbox" checked></label></div>
+        <label class="range-label"><span>Recul caméra GPX <output id="gpxFollowDistanceValue">1,6×</output></span><input id="gpxFollowDistance" type="range" min="0.6" max="4" step="0.1" value="1.6"></label>
+        <p class="control-hint">Augmente le recul pour dézoomer. Réglable pendant le suivi, sauvegardé et appliqué à l’export vidéo.</p>
         <p id="gpxPlaybackStatus" class="control-hint" role="status">Suivi stabilisé · progression calculée sur la distance</p>
         <label class="range-label"><span>Progression <output id="gpxProgressValue">0 %</output></span><input id="gpxProgress" type="range" min="0" max="1000" value="0" step="1" disabled></label>
         <label class="select-label"><span>Durée du parcours (hors transitions)</span><select id="gpxDuration"><option value="12">12 s</option><option value="25" selected>25 s</option><option value="45">45 s</option><option value="90">90 s</option></select></label>
@@ -145,7 +147,7 @@
   <script>
     addEventListener('error',event=>{if(/WebGL|context/i.test(event.message||'')){const loading=document.getElementById('loadingPanel'),panel=document.getElementById('errorPanel');if(loading)loading.hidden=true;if(panel){panel.hidden=false;panel.textContent='La 3D WebGL est désactivée dans ce navigateur. Active l’accélération graphique ou ouvre cette page dans Chrome, Firefox ou Safari récent.'}}});
   </script>
-  <script type="module" src="peak-dialog.mjs?v=7"></script>
-  <script type="module" src="app.js?v=7"></script>
+  <script type="module" src="peak-dialog.mjs?v=8"></script>
+  <script type="module" src="app.js?v=8"></script>
 </body>
 </html>
