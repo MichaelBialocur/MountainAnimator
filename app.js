@@ -57,7 +57,7 @@ const videoExport=new VideoExport();
 let exportCanvas, exportContext, exportSettings, exportUrl;
 
 let cameraShots=[];
-let storyImageDraft='',mediaBusy=0;
+let storyImageDraft='',storyDraftVersion=0,mediaBusy=0;
 let narrativePins=[],storyTrackKey='',storyEditingId=null,storyPicking=false;
 const story={visited:[],active:null};
 const cinema={playing:false,paused:false,time:0,timeline:null};
@@ -1260,7 +1260,7 @@ function rebuildStoryPins(){
     route.storyPins.sort((a,b)=>a.progress-b.progress||a.id.localeCompare(b.id));
   });
 }
-function newStoryDraft(){storyImageDraft='';syncStoryPhoto();storyEditingId=null;$('#storyPosition').value=(gpxPlayer.progress*100).toFixed(2);$('#storyName').value='';$('#storyComment').value='';$('#storySave').textContent='Ajouter cette étape';}
+function newStoryDraft(){storyDraftVersion++;storyImageDraft='';syncStoryPhoto();storyEditingId=null;$('#storyPosition').value=(gpxPlayer.progress*100).toFixed(2);$('#storyName').value='';$('#storyComment').value='';$('#storySave').textContent='Ajouter cette étape';}
 function renderStoryEditor(){
   const block=gpxPlayer.routeBlock,pins=storyPinsFor();const available=!!block;
   $('#storySave').disabled=!available;$('#storyPick').disabled=!available;
@@ -1268,7 +1268,7 @@ function renderStoryEditor(){
   $('#storyList').innerHTML=pins.map((p,i)=>`<li><span>${i+1}. ${escapeHtml(p.name)} · ${(p.progress*100).toFixed(1)} % · pause ${p.pause}s${p.angle?` + orbite ${p.angle}° / ${p.orbitDuration}s`:''}</span><div><button type="button" data-story-edit="${escapeHtml(p.id)}">Modifier / voir</button><button type="button" data-story-delete="${escapeHtml(p.id)}">Supprimer</button></div></li>`).join('');
   $('#storyStatus').textContent=available?`${pins.length} étapes · +${pins.reduce((sum,p)=>sum+stopDuration(p),0).toFixed(1)} s avec transitions${all.length>pins.length?' · certaines étapes sont hors de la découpe':''}`:'Importe un GPX pour placer des étapes.';
   document.querySelectorAll('[data-story-edit]').forEach(button=>button.addEventListener('click',()=>{
-    const pin=pins.find(p=>p.id===button.dataset.storyEdit);stopGpxAnimation();setGpxProgress(pin.progress);storyEditingId=pin.id;storyImageDraft=pin.image||'';syncStoryPhoto();
+    const pin=pins.find(p=>p.id===button.dataset.storyEdit);stopGpxAnimation();setGpxProgress(pin.progress);storyEditingId=pin.id;storyDraftVersion++;storyImageDraft=pin.image||'';syncStoryPhoto();
     $('#storyPosition').value=(pin.progress*100).toFixed(4);$('#storyName').value=pin.name;$('#storyComment').value=pin.comment;$('#storyPause').value=pin.pause;$('#storyAngle').value=pin.angle;$('#storyOrbitDuration').value=pin.orbitDuration;$('#storySave').textContent='Enregistrer cette étape';
     if(gpxPlayer.follow){captureFollowOffset();beginCameraTransition(followPose(),.7,'scrub',()=>{gpxPlayer.phase='idle';releaseCamera();});}
   }));
@@ -1286,8 +1286,8 @@ function saveStoryPin(){
   stopGpxAnimation();narrativePins=narrativePins.filter(p=>p.id!==pin.id);narrativePins.push(pin);setGpxProgress(progress);rebuildStoryPins();newStoryDraft();renderStoryEditor();saveProject();
 }
 function bindStoryControls(){
-  $('#storyPhoto').addEventListener('change',async e=>{const file=e.target.files?.[0];e.target.value='';if(!file)return;const draft=storyEditingId,track=storyTrackKey,block=gpxPlayer.routeBlock;await withMedia(async()=>{const id=await importMedia(file);if(draft===storyEditingId&&track===storyTrackKey&&block===gpxPlayer.routeBlock){storyImageDraft=id;syncStoryPhoto();}});});
-  $('#storyRemovePhoto').addEventListener('click',()=>{storyImageDraft='';syncStoryPhoto();});
+  $('#storyPhoto').addEventListener('change',async e=>{const file=e.target.files?.[0];e.target.value='';if(!file)return;const draft=storyDraftVersion,track=storyTrackKey,block=gpxPlayer.routeBlock;await withMedia(async()=>{const id=await importMedia(file);if(draft===storyDraftVersion&&track===storyTrackKey&&block===gpxPlayer.routeBlock){storyImageDraft=id;syncStoryPhoto();}});});
+  $('#storyRemovePhoto').addEventListener('click',()=>{storyDraftVersion++;storyImageDraft='';syncStoryPhoto();});
   $('#storyEnabled').checked=globalSettings.storyEnabled;
   $('#storyEnabled').addEventListener('change',e=>{stopGpxAnimation();globalSettings.storyEnabled=e.target.checked;saveProject();});
   $('#storySave').addEventListener('click',saveStoryPin);$('#storyNew').addEventListener('click',newStoryDraft);

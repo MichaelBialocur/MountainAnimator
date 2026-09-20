@@ -74,3 +74,14 @@ test('offline book rendering matches absolute preview time and restores a half-t
  assert.equal(frames[0].index,0);assert.ok(frames[2].turn>.4&&frames[2].turn<.6);assert.equal(frames.at(-1).index,1);
  const now=b.group.userData.statsCard.userData;near(now.turn,before.books[0].turn);near(now.manualTurn.elapsed,.8);a.dom.window.close();
 });
+
+
+test('finishing a photo import after starting another pin draft cannot attach it to the wrong step',async()=>{
+ let finish;
+ const {a}=setup({importMedia:()=>new Promise(resolve=>{finish=resolve;})});
+ a.gpxTrack=[{lat:46.18,lon:7.09,ele:2400,segment:0},{lat:46.18,lon:7.15,ele:2600,segment:0}];a.buildGpxRoutes();
+ const file=a.window.document.querySelector('#storyPhoto');Object.defineProperty(file,'files',{value:[{type:'image/jpeg'}]});file.dispatchEvent(new a.window.Event('change'));
+ click(a,'storyNew');finish('photo-old-draft');await new Promise(resolve=>setImmediate(resolve));
+ field(a,'storyName','Nouveau sommet');a.saveStoryPin();
+ const saved=JSON.parse(a.window.localStorage.getItem('mountainAnimatorProjectV3'));assert.equal(saved.narrativePins[0].image,'');a.dom.window.close();
+});

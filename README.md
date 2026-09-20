@@ -277,7 +277,7 @@ L’annulation restaure aussi la page et son éventuel tournage en cours.
 L’export reste **sans piste audio** : ajoute une narration enregistrée dans ton
 logiciel de montage, en utilisant les temps de lecture réglables.
 
-Validation : 60 tests, dont conservation des longueurs du feuillet, absence de
+Validation : 61 tests, dont conservation des longueurs du feuillet, absence de
 pénétration dans la pile, aller/retour, édition/sauvegarde indépendante, cadrages
 portrait/paysage, liaison carnet→montagne et restauration après export annulé.
 `tests/narrative-smoke.html` vérifie dans un navigateur l’import, le redimensionnement,
