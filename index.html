@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://services.arcgisonline.com" crossorigin>
   <link rel="preconnect" href="https://elevation-tiles-prod.s3.amazonaws.com" crossorigin>
   <link rel="stylesheet" href="styles.css?v=9">
-  <link rel="stylesheet" href="controls.css?v=10">
+  <link rel="stylesheet" href="controls.css?v=11">
   <script type="importmap">
     {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
@@ -72,6 +72,33 @@
 <button id="resetStatsPosition" class="secondary wide">Replacer le carnet devant la montagne</button>
         </div>
       </details>
+      <details class="control-section panel-section" data-panel-section id="notebookSection">
+        <summary class="section-title"><h2>Carnets de voyage</h2><span>RÉCIT & PHOTOS</span></summary>
+        <div class="section-body">
+          <label class="select-label"><span>Carnet de la montagne</span><select id="bookMountain"></select></label>
+          <button id="bookFocus" class="secondary wide">Approcher la caméra du carnet</button>
+          <label class="select-label"><span>Double page à modifier</span><select id="bookPage"></select></label>
+          <canvas id="bookPreview" width="768" height="512" aria-label="Aperçu de la double page"></canvas>
+          <div class="book-buttons"><button id="bookPrevious" class="secondary">← Page précédente</button><button id="bookNext" class="secondary">Page suivante →</button></div>
+          <p id="bookPageStatus" class="control-hint" role="status"></p>
+          <div id="bookPageFields" hidden>
+            <label>Titre<input id="bookTitle" maxlength="80" placeholder="Ex. La dernière arête"></label>
+            <label>Récit<textarea id="bookText" rows="6" maxlength="1000" placeholder="Raconte ce passage de l’ascension…"></textarea></label>
+            <p class="control-hint">L’aperçu montre la mise en page finale. Si le texte déborde, répartis-le sur une autre double page.</p>
+            <label class="photo-picker">Photo de la page<input id="bookPhoto" type="file" accept="image/jpeg,image/png,image/webp"></label>
+            <button id="bookRemovePhoto" class="secondary wide">Retirer la photo</button>
+            <label>Légende<textarea id="bookCaption" rows="2" maxlength="160"></textarea></label>
+            <button id="bookSave" class="primary wide">Enregistrer la double page</button>
+            <button id="bookDelete" class="secondary wide">Supprimer cette double page</button>
+          </div>
+          <button id="bookAdd" class="secondary wide">＋ Ajouter une double page</button>
+          <label class="select-label"><span>Temps de lecture par double page</span><select id="bookHold"><option value="4">4 s</option><option value="7" selected>7 s</option><option value="12">12 s</option><option value="20">20 s</option></select></label>
+          <button id="bookPlay" class="primary wide">Lire le carnet avec la caméra</button>
+          <button id="bookAddShot" class="secondary wide">＋ Ajouter cette lecture à la composition</button>
+          <p id="mediaStatus" class="control-hint" role="status"></p>
+          <p class="control-hint">La première double page reprend les statistiques. Les suivantes accueillent tes récits et photos. Les photos restent sur cet appareil, dans ce navigateur. L’export vidéo inclut les pages et les photos ; ajoute ta voix au film dans ton logiciel de montage.</p>
+        </div>
+      </details>
       <details class="control-section panel-section" data-panel-section id="cloudsSection">
         <summary class="section-title"><h2>Nuages</h2><span>ATMOSPHÈRE</span></summary>
         <div class="section-body">
@@ -113,6 +140,10 @@
           <label>Position sur le parcours (%)<input id="storyPosition" type="number" min="0" max="100" step="any" value="0"></label>
           <label>Nom du lieu<input id="storyName" maxlength="80" placeholder="Ex. Sommet du Lagginhorn"></label>
           <label>Texte de narration<textarea id="storyComment" maxlength="240" rows="3" placeholder="Ex. Dernier sommet de la journée…"></textarea></label>
+          <label class="photo-picker">Photo de cette étape (facultative)<input id="storyPhoto" type="file" accept="image/jpeg,image/png,image/webp"></label>
+          <img id="storyPhotoPreview" class="photo-preview" alt="Photo de l’étape" hidden>
+          <button id="storyRemovePhoto" type="button" class="secondary wide">Retirer la photo de l’étape</button>
+          <p class="control-hint">La photo et le texte apparaissent pendant l’arrêt, puis disparaissent avant la reprise. Enregistre l’étape après avoir choisi la photo.</p>
           <label>Pause (secondes)<input id="storyPause" type="number" min="0" max="30" step="1" value="3"></label>
           <label class="select-label"><span>Orbite à cette étape</span><select id="storyAngle"><option value="0">Aucune · pause seule</option><option value="90">90°</option><option value="180" selected>180°</option><option value="360">Tour complet · 360°</option><option value="-180">180° · sens inverse</option><option value="-360">360° · sens inverse</option></select></label>
           <label>Durée de l’orbite (secondes)<input id="storyOrbitDuration" type="number" min="2" max="30" step="1" value="6"></label>
@@ -132,7 +163,7 @@
       <details class="control-section panel-section" data-panel-section id="cinemaSection">
         <summary class="section-title"><h2>Outils caméra</h2><span id="sequenceTotal">0 plans</span></summary>
         <div class="section-body">
-        <label class="select-label"><span>Mouvement</span><select id="shotType"><option value="orbit">Orbite autour d’une montagne</option><option value="transfer">Liaison entre deux montagnes</option></select></label>
+        <label class="select-label"><span>Mouvement</span><select id="shotType"><option value="orbit">Orbite autour d’une montagne</option><option value="transfer">Liaison entre deux montagnes</option><option value="book">Lecture du carnet · toutes les pages</option></select></label>
         <label class="select-label"><span>Montagne de départ</span><select id="shotFrom"></select></label>
         <label class="select-label" id="shotToRow" hidden><span>Montagne d’arrivée</span><select id="shotTo"></select></label>
         <label class="select-label"><span>Durée du plan</span><select id="shotDuration"><option value="6">6 s</option><option value="12" selected>12 s</option><option value="20">20 s</option><option value="30">30 s</option><option value="60">60 s</option></select></label>
@@ -188,6 +219,6 @@
   </script>
   <script type="module" src="peak-dialog.mjs?v=9"></script>
   <script type="module" src="panel-sections.mjs?v=10"></script>
-  <script type="module" src="app.js?v=10"></script>
+  <script type="module" src="app.js?v=11"></script>
 </body>
 </html>

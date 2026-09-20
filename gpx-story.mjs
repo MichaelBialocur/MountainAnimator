@@ -23,7 +23,7 @@ export function nextStoryPin(pins,visited,progress,end){
 export function sanitizeStoryPins(values){
   if(!Array.isArray(values))return [];
   return values.filter(p=>p&&typeof p.id==='string'&&typeof p.track==='string'&&typeof p.block==='string'&&Number.isFinite(p.lat)&&Number.isFinite(p.lon)).map(p=>({...p,
-    name:String(p.name||'Étape').slice(0,80),comment:String(p.comment||'').slice(0,240),progress:clamp(Number(p.progress)||0),
+    image:typeof p.image==='string'&&/^photo-[a-zA-Z0-9-]{1,80}$/.test(p.image)?p.image:'',name:String(p.name||'Étape').slice(0,80),comment:String(p.comment||'').slice(0,240),progress:clamp(Number(p.progress)||0),
     pause:clamp(Number(p.pause)||0,0,30),angle:clamp(Number(p.angle)||0,-360,360),orbitDuration:clamp(Number(p.orbitDuration)||6,2,30)
   }));
 }

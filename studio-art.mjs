@@ -159,3 +159,32 @@ export function paintTravelNotebook(canvas,stats,route=[]){
   ctx.strokeStyle='#9d8261';ctx.lineWidth=3;ctx.setLineDash([8,10]);ctx.beginPath();ctx.moveTo(w*.5,25);ctx.lineTo(w*.5,h-25);ctx.stroke();ctx.setLineDash([]);
   return canvas;
 }
+
+export function containPhoto(ctx,image,x,y,w,h){
+  const iw=image.naturalWidth||image.width,ih=image.naturalHeight||image.height;
+  if(!iw||!ih)return;const scale=Math.min(w/iw,h/ih),dw=iw*scale,dh=ih*scale;
+  ctx.drawImage(image,x+(w-dw)/2,y+(h-dh)/2,dw,dh);
+}
+export function paintBookSpread(canvas,page,image,index){
+  const ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height;ctx.fillStyle='#eee4ca';ctx.fillRect(0,0,w,h);
+  const rng=seededRandom(914+index);for(let i=0;i<5000;i++){ctx.fillStyle=`rgba(116,83,39,${rng()*.075})`;ctx.fillRect(rng()*w,rng()*h,1+rng()*3,1);}
+  const shade=ctx.createLinearGradient(w*.45,0,w*.55,0);shade.addColorStop(0,'#76522a00');shade.addColorStop(.5,'#76522a55');shade.addColorStop(1,'#76522a00');ctx.fillStyle=shade;ctx.fillRect(w*.45,0,w*.1,h);
+  ctx.strokeStyle='#b7a984';ctx.lineWidth=1;for(let y=239;y<h-120;y+=36){ctx.beginPath();ctx.moveTo(w*.065,y);ctx.lineTo(w*.45,y);ctx.stroke();}
+  ctx.fillStyle='#42503e';ctx.font='italic 47px Georgia, serif';wrappedText(ctx,page.title||'Au fil des sommets',w*.065,95,w*.37,2);
+  ctx.fillStyle='#4d493c';ctx.font='30px Georgia, serif';
+  let textY=234;for(const paragraph of (page.text||'').split(/\n/)){let line='';for(const word of paragraph.split(/\s+/)){const next=line?line+' '+word:word;if(ctx.measureText(next).width>w*.37&&line){if(textY<h-85)ctx.fillText(line,w*.065,textY,w*.37);textY+=36;line=word;}else line=next;}if(line&&textY<h-85)ctx.fillText(line,w*.065,textY,w*.37);textY+=36;}
+  if(textY>=h-85){ctx.fillStyle='#eee4ca';ctx.fillRect(w*.40,h-112,w*.05,40);ctx.fillStyle='#4d493c';ctx.fillText('…',w*.415,h-86);}
+  const x=w*.545,y=90,pw=w*.40,ph=h*.68;
+  ctx.save();ctx.translate(x+pw/2,y+ph/2);ctx.rotate(-.018);ctx.shadowColor='#45371e44';ctx.shadowBlur=18;ctx.shadowOffsetX=6;ctx.shadowOffsetY=8;ctx.fillStyle='#fcf9ee';ctx.fillRect(-pw/2-15,-ph/2-15,pw+30,ph+65);ctx.shadowBlur=0;ctx.shadowOffsetX=ctx.shadowOffsetY=0;
+  if(image)containPhoto(ctx,image,-pw/2,-ph/2,pw,ph);else{ctx.strokeStyle='#9eab93';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-pw*.4,ph*.2);ctx.lineTo(-pw*.1,-ph*.12);ctx.lineTo(pw*.05,ph*.03);ctx.lineTo(pw*.22,-ph*.3);ctx.lineTo(pw*.43,ph*.2);ctx.stroke();ctx.fillStyle='#82755f';ctx.font='italic 28px Georgia';ctx.fillText('Un souvenir à raconter',-pw*.35,ph*.36);}
+  ctx.restore();ctx.fillStyle='#625741';ctx.font='italic 29px Georgia, serif';wrappedText(ctx,page.caption||'',x,h*.86,pw,3);
+  ctx.font='23px Georgia';ctx.fillText(String(index*2+1),w*.08,h-38);ctx.fillText(String(index*2+2),w*.92,h-38);return canvas;
+}
+export function paintStoryPhoto(canvas,pin,image){
+  const ctx=canvas.getContext('2d');ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.save();ctx.scale(canvas.width/900,canvas.height/1040);
+  // A small photographic print, above the pin, separate from the unobtrusive counters.
+  ctx.shadowColor='#0008';ctx.shadowBlur=16;ctx.fillStyle='#f5f0e3';ctx.fillRect(24,18,852,590);ctx.shadowBlur=0;
+  if(image)containPhoto(ctx,image,40,34,820,554);else{ctx.fillStyle='#716d62';ctx.font='34px sans-serif';ctx.fillText('Photo indisponible · réimporte-la',95,310);}
+  ctx.restore();const text=canvas.ownerDocument.createElement('canvas');text.width=900;text.height=440;paintStoryLabel(text,pin);ctx.drawImage(text,0,canvas.height*600/1040,canvas.width,canvas.height*440/1040);return canvas;
+}

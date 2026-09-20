@@ -12,6 +12,8 @@ import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import * as art from '../studio-art.mjs';
+import * as books from '../travel-book.mjs';
+import * as media from '../narrative-media.mjs';
 import * as storyMath from '../gpx-story.mjs';
 
 export function fakeContext(){
@@ -44,12 +46,12 @@ export function appHarness(saved,overrides={}){
     .replace(/^import .*;\n/gm,'')
     .replace('\nrebuildScene();\n','\n// Network loading is replaced by explicit synthetic terrain in tests.\n');
   const sandbox={
-    ...motion,...art,...storyMath,...terrain,...cinemaMath,LineSegments2,LineSegmentsGeometry,LineMaterial,...atmosphere,...video,paintGround:canvas=>canvas,THREE:{...THREE,WebGLRenderer:Renderer},OrbitControls,
+    ...books,...media,...motion,...art,...storyMath,...terrain,...cinemaMath,LineSegments2,LineSegmentsGeometry,LineMaterial,...atmosphere,...video,paintGround:canvas=>canvas,THREE:{...THREE,WebGLRenderer:Renderer},OrbitControls,
     document:window.document,window,navigator:window.navigator,localStorage:window.localStorage,DOMParser:window.DOMParser,
     matchMedia:()=>({matches:false}),devicePixelRatio:1,requestAnimationFrame:()=>0,
     setTimeout:(fn,ms)=>{timers.push({fn,ms});return timers.length;},clearTimeout:()=>{},Image:window.Image,URL,URLSearchParams,console,performance,...overrides
   };
-  const names=['story','storyPinsFor','saveStoryPin','rebuildStoryPins','renderStoryEditor','updateStoryVisuals','scene','camera','controls','floor','gpxPlayer','globalSettings','createBlock','settingsFor','clearBlocks','positionBlocks','buildGpxRoutes','parseGpx','trackStats','setGpxProgress','toggleGpxAnimation','stopGpxAnimation','advancePlayback','followPose','routeOverviewPose','updateFollowCamera','updateCameraTransition','safeCameraHeight','refreshStatsBillboards','makeStatsCanvas','handleGpxFile','restoreProject','saveProject','formatDuration','bindControls','createPeakLabels','updatePeakLabels','clearCloudTerrain','updateSnow','runVideoExport','saveExportView','restoreExportView','sun','ambient','rim','cinema','startCinema','stopCinema','advanceCinema','applyCinemaTime','mountainCameraPose','globalCameraPose','syncCinemaEditor','updateLiveStats'];
+  const names=['story','storyPinsFor','saveStoryPin','rebuildStoryPins','renderStoryEditor','updateStoryVisuals','scene','camera','controls','floor','gpxPlayer','globalSettings','createBlock','settingsFor','clearBlocks','positionBlocks','buildGpxRoutes','parseGpx','trackStats','setGpxProgress','toggleGpxAnimation','stopGpxAnimation','advancePlayback','followPose','routeOverviewPose','updateFollowCamera','updateCameraTransition','safeCameraHeight','refreshStatsBillboards','makeStatsCanvas','handleGpxFile','restoreProject','saveProject','formatDuration','bindControls','createPeakLabels','updatePeakLabels','clearCloudTerrain','updateSnow','runVideoExport','saveExportView','restoreExportView','sun','ambient','rim','cinema','startCinema','stopCinema','advanceCinema','applyCinemaTime','mountainCameraPose','globalCameraPose','syncCinemaEditor','updateLiveStats','makeBookSpread','advanceBookTurns','turnNotebook','notebookCameraPose','normalizeBookShot','syncNotebookEditor','renderNotebookEditor'];
   const api=vm.runInNewContext(source+`\n;({${names.join(',')},get blocks(){return blocks;},set blocks(value){blocks=value;},get gpxTrack(){return gpxTrack;},set gpxTrack(value){gpxTrack=value;}})`,sandbox);
   api.window=window;api.dom=dom;api.timers=timers;
   api.syntheticBlock=(id='chavalard',lon=7.11312)=>{

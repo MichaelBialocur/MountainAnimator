@@ -1,0 +1,16 @@
+<!doctype html><meta charset="utf-8"><title>Narrative media smoke test</title>
+<style>body{background:#223038;color:#eee;font:16px system-ui;padding:24px}button{padding:12px;margin:8px}canvas{display:block;max-width:700px;width:100%;margin:20px 0}</style>
+<h1>Narrative media integration test</h1>
+<button id="write">Test photo import and persistence</button><button id="read">Read saved photo</button>
+<p id="result" role="status">Ready</p><canvas id="spread" width="1536" height="1024"></canvas><canvas id="pin" width="900" height="1040"></canvas>
+<script type="module">
+import {importMedia,prepareMedia,mediaImage} from '../narrative-media.mjs?v=11';
+import {paintBookSpread,paintStoryPhoto} from '../studio-art.mjs?v=11';
+const result=document.querySelector('#result');
+async function show(id){await prepareMedia([id]);const image=mediaImage(id);if(!image||image.naturalWidth!==1600||image.naturalHeight!==1000)throw Error('Resizing or restoration failed');
+ paintBookSpread(document.querySelector('#spread'),{title:'Le récit de l’ascension',text:'Premier jour.\nUne halte sur l’arête avant de poursuivre vers le sommet.',caption:'Photo test · conservée sur cet appareil.'},image,1);
+ paintStoryPhoto(document.querySelector('#pin'),{name:'Au sommet',comment:'Une pause pour admirer le paysage.'},image);
+ result.textContent='PASS · imported image decoded at 1600 × 1000 · notebook and pin rendered';}
+document.querySelector('#write').onclick=async()=>{try{result.textContent='Working';const c=document.createElement('canvas');c.width=2400;c.height=1500;const ctx=c.getContext('2d');ctx.fillStyle='#719aa4';ctx.fillRect(0,0,c.width,c.height);ctx.fillStyle='#364958';ctx.beginPath();ctx.moveTo(0,1500);ctx.lineTo(900,220);ctx.lineTo(1600,1300);ctx.lineTo(2100,800);ctx.lineTo(2400,1500);ctx.fill();ctx.fillStyle='#fff';ctx.font='100px serif';ctx.fillText('PHOTO · SUMMIT',100,1350);const blob=await new Promise(r=>c.toBlob(r,'image/png'));const id=await importMedia(new File([blob],'smoke.png',{type:'image/png'}));sessionStorage.setItem('narrative-smoke-id',id);await show(id);}catch(e){result.textContent='FAIL · '+e.message;}};
+document.querySelector('#read').onclick=async()=>{try{await show(sessionStorage.getItem('narrative-smoke-id'));}catch(e){result.textContent='FAIL · '+e.message;}};
+</script>

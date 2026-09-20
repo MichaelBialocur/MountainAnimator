@@ -6,7 +6,7 @@ import {bindPanelSections} from '../panel-sections.mjs';
 test('all menu sections start closed; bulk and individual toggles preserve settings without WebGL',()=>{
   const dom=makeDom(),doc=dom.window.document;
   const sections=[...doc.querySelectorAll('[data-panel-section]')];
-  assert.equal(sections.length,8);
+  assert.equal(sections.length,9);
   assert.ok(sections.every(section=>section.tagName==='DETAILS'&&!section.open));
   assert.equal(doc.querySelectorAll('#controlPanel details[open]').length,0);
   bindPanelSections(doc);

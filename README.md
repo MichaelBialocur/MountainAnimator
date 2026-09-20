@@ -234,3 +234,51 @@ Toutes les sections du menu démarrent repliées. Clique sur un en-tête pour
 ouvrir uniquement les réglages utiles, ou sur **Tout déplier / Tout replier**.
 Le repli conserve les valeurs saisies. Le choix d’une étape directement sur
 le tracé rouvre automatiquement la section GPX et son éditeur de narration.
+
+
+## V11 — Carnets animés et photos des étapes
+
+**Carnets de voyage** contient un carnet indépendant par montagne. La première
+double page reprend les statistiques ; ajoute jusqu’à 12 doubles pages de récit,
+avec titre, texte, photo et légende. Les champs texte s’enregistrent lorsqu’on
+les quitte ; le bouton Enregistrer reste disponible. L’aperçu montre la mise en
+page et signale les textes tronqués : répartis un long récit sur plusieurs pages.
+La photo est affichée entière, sans recadrage forcé.
+
+Le modèle utilise une couverture en cuir à bords arrondis, une tranche de papier,
+des coutures et un signet. La page mobile possède un recto et un verso distincts.
+Son maillage se déforme par intégration d’une tangente variable sur la largeur :
+la feuille se courbe et son coin se soulève, avec des normales et des ombres mises
+à jour. C’est une déformation procédurale déterministe, pas une simulation mécanique
+du papier. Les flèches permettent de feuilleter dans les deux sens.
+
+**Approcher la caméra du carnet** cadre le livre. **Lire le carnet avec la caméra**
+ajoute une approche douce puis les temps de lecture et les tournages de pages.
+**Ajouter cette lecture à la composition** permet de l’enchaîner avec les orbites
+et les liaisons entre montagnes, dans Outils caméra. Le plan « Lecture du carnet »
+est également disponible dans la liste des mouvements. La durée s’adapte au nombre
+de pages et au temps de lecture choisi ; limite totale de composition : 295 s.
+
+Dans **Parcours GPX → Étapes et narration**, choisis une photo facultative puis
+**Enregistrer cette étape**. Elle apparaît avec le texte pendant la pause/orbite,
+au-dessus du pin, puis disparaît avant la reprise. Le point doit rester dans le
+champ de la caméra. Le rendu des informations n’est pas masqué par le terrain.
+
+Les photos JPEG, PNG et WebP (25 Mo maximum à l’import) sont redimensionnées à
+1 600 px maximum et conservées en JPEG dans IndexedDB. Les réglages ne contiennent
+que leurs identifiants. Les fichiers restent sur l’appareil et le navigateur
+utilisés ; ils ne sont ni envoyés à GitHub, ni synchronisés entre appareils.
+Effacer les données du site efface ces photos. Une erreur de stockage ou une photo
+manquante est signalée ; l’export ne continue pas silencieusement sans les médias.
+
+L’export image par image inclut les photos, les pauses et les pages déformées.
+Le temps du film pilote le tournage ; une machine lente ne saute pas d’images.
+L’annulation restaure aussi la page et son éventuel tournage en cours.
+L’export reste **sans piste audio** : ajoute une narration enregistrée dans ton
+logiciel de montage, en utilisant les temps de lecture réglables.
+
+Validation : 60 tests, dont conservation des longueurs du feuillet, absence de
+pénétration dans la pile, aller/retour, édition/sauvegarde indépendante, cadrages
+portrait/paysage, liaison carnet→montagne et restauration après export annulé.
+`tests/narrative-smoke.html` vérifie dans un navigateur l’import, le redimensionnement,
+le rendu 2D des photos et leur restauration IndexedDB après rechargement.
