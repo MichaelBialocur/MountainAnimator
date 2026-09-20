@@ -176,3 +176,45 @@ elles ne remplacent pas une vérification visuelle avec un GPU compatible.
   avec trois puces (altitude, dénivelé positif cumulé, distance). Taille lisible
   indépendante du zoom, placement adapté aux bords de l’image et rendu au-dessus
   du terrain et des nuages. La même fiche apparaît dans le rendu vidéo.
+
+
+## V9 — compteurs discrets et étapes narratives
+
+Les compteurs du parcours suivi sont trois lignes blanches sans fond ni cadre,
+avec un léger contour sombre pour rester lisibles sur la neige. Ils gardent la
+même position en bas à gauche, quel que soit le zoom ou le côté de la trace.
+
+Dans **Parcours GPX → Étapes et narration du GPX** :
+
+1. Choisir la montagne suivie, puis déplacer le curseur de progression, saisir
+   un pourcentage ou utiliser **Choisir un point sur la trace** et toucher le GPX.
+   Le clic s’accroche au point le plus proche sur la trace de cette montagne.
+2. Saisir le nom du lieu, un commentaire facultatif, une durée de pause (0–30 s),
+   un angle d’orbite (aucun, 90°, 180° ou 360°, avec sens inverse) et sa durée (2–30 s).
+3. **Ajouter cette étape**. Les étapes sont automatiquement rangées dans l’ordre
+   du parcours. **Modifier / voir** recharge une étape et sa position ; **Supprimer**
+   l’enlève. **Nouvelle étape** quitte l’édition et prépare une nouvelle entrée.
+4. Revenir au début puis **Animer**. La progression s’arrête exactement au pin ;
+   son nom et son texte apparaissent avec un trait de repère. L’approche dure 1,2 s,
+   suivie de la pause, de l’orbite éventuelle et de 1,2 s de reprise douce. Une orbite
+   modifie le cap de suivi pour continuer depuis l’angle obtenu. Pause/reprise
+   fige aussi le temps de l’étape, sans recommencer l’orbite.
+
+Les étapes sont facultatives et désactivables. Jusqu’à 20 étapes par parcours et
+par montagne, y compris au point initial ou final. Elles sont attachées au GPX
+et à leurs coordonnées, sauvegardées localement et retrouvées en réimportant le
+même parcours. Le GPX lui-même reste à réimporter après rechargement de la page.
+Une étape sortie de la découpe n’est pas déplacée sur un autre lieu : elle reste
+sauvegardée et revient lorsque le cadrage géographique l’inclut à nouveau.
+
+Le mode **GPX complet** exporte les pauses, orbites, pins et labels avec le rendu
+image par image ; leur durée s’ajoute à la durée de déplacement. La limite totale
+reste de 5 minutes par export. La narration concerne la portion du GPX de la
+montagne suivie ; un même bloc peut contenir plusieurs sommets et étapes. Les
+compositions orbitales indépendantes restent dans les Outils caméra.
+
+Vérifications : départ/arrivée, plusieurs étapes, pause pendant une orbite,
+reprise du parcours, sauvegarde liée au GPX, rotation du bloc, modification/suppression,
+texte fixe à l’écran et export avec restitution d’une étape mise en pause. Les
+textures de texte ont été rendues et inspectées sur canvas ; les tests automatisés
+utilisent les géométries Three.js avec un renderer de substitution.

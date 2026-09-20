@@ -31,3 +31,9 @@ input:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid 
 .shot-list li div { display:flex; gap:8px; margin-top:5px; }
 .shot-list button { border:1px solid #817660; background:#24342d; color:#f1e7ce; border-radius:5px; padding:4px 12px; }
 label[hidden] { display:none !important; }
+
+
+.story-editor { margin-top:18px; padding-top:14px; border-top:1px solid #ffffff24; }
+.story-editor summary { cursor:pointer; color:#e9dfca; font-weight:600; }
+.story-editor > label:not(.toggle-row) { display:grid; gap:6px; margin:12px 0; }
+.story-editor input[type=number], .story-editor input[type=text], .story-editor input:not([type]), .story-editor textarea { width:100%; box-sizing:border-box; }

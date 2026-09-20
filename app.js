@@ -1,3 +1,4 @@
+import { trackFingerprint, nearestRoutePoint, stopDuration, nextStoryPin, sanitizeStoryPins } from './gpx-story.mjs?v=9';
 import { decodeTerrarium, sampleNumericTiles, cleanTerrain } from './terrain-data.mjs?v=7';
 import { compileCameraSequence, sampleCameraSequence } from './camera-sequence.mjs?v=7';
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
@@ -8,7 +9,7 @@ import { VideoExport, supportedVideoTypes, videoDimensions } from './video-expor
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { clamp, smootherstep, dampingAlpha, distanceKm, measureRoute, sampleRoute, smoothRoutePoint, clipToBounds, pointInOutline, interpolateGeo, routeMetrics } from './route-motion.mjs?v=7';
-import { paintGround, paintTravelNotebook, paintLiveGpxCard, GROUND_KINDS } from './studio-art.mjs?v=8';
+import { paintGround, paintTravelNotebook, paintLiveGpxCard, paintStoryLabel, GROUND_KINDS } from './studio-art.mjs?v=9';
 
 const PEAKS = [
   { id:'chavalard', name:'Grand Chavalard', elevation:2899, lat:46.17869, lon:7.11312, region:'Fully' },
@@ -33,7 +34,7 @@ const TILE_CACHE = new Map();
 const $ = selector => document.querySelector(selector);
 
 const globalSettings = {
-  gpxFollowDistance:1.6, terrainSmoothing:.35, quality:'high', exaggeration:1, brightness:1.25,
+  storyEnabled:true, gpxFollowDistance:1.6, terrainSmoothing:.35, quality:'high', exaggeration:1, brightness:1.25,
   sunAzimuth:315, sunElevation:38, sunIntensity:3.2,
   clouds:true, cloudDensity:8, cloudDetail:2, cloudOpacity:.7, cloudSize:1,
   cloudType:'cumulus', cloudHeight:2600, cloudSpread:900, cloudCumulonimbus:20, cloudCumulus:60, cloudStratus:25, cloudCirrus:15, fillLight:.55, shadows:true, groundTexture:'marble', cloudSeed:1
@@ -54,8 +55,10 @@ const videoExport=new VideoExport();
 let exportCanvas, exportContext, exportSettings, exportUrl;
 
 let cameraShots=[];
+let narrativePins=[],storyTrackKey='',storyEditingId=null,storyPicking=false;
+const story={visited:[],active:null};
 const cinema={playing:false,paused:false,time:0,timeline:null};
-const gpxPlayer = { playing:false, progress:0, duration:25, follow:true, routeBlock:null, phase:'idle', transition:null, offset:null, lastPart:null };
+const gpxPlayer = { paused:false, playing:false, progress:0, duration:25, follow:true, routeBlock:null, phase:'idle', transition:null, offset:null, lastPart:null };
 
 restoreProject();
 
@@ -243,7 +246,7 @@ async function rebuildScene(){
 }
 
 function clearBlocks(){
-  stopCinema();
+  cancelStoryPick();stopCinema();
   blocks.forEach(block=>{
     scene.remove(block.group);block.group.userData.route?.geometry?.dispose();
     const disposedMaterials=new Set(),disposedTextures=new Set(),disposedGeometries=new Set();
@@ -647,6 +650,7 @@ function routeEdgesForBlock(block){
 }
 
 function buildGpxRoutes(){
+  storyTrackKey=trackFingerprint(gpxTrack);
   const previousId=gpxPlayer.routeBlock?.peak.id;let bestBlock=null,bestLength=0;
   blocks.forEach(block=>{
     const data=block.group.userData,old=data.route;
@@ -665,7 +669,7 @@ function buildGpxRoutes(){
       if(Number.isFinite(a.ele)&&Number.isFinite(b.ele)){stats.gain+=Math.max(0,b.ele-a.ele);stats.hasElevation=true;}
       if(Number.isFinite(a.time)&&Number.isFinite(b.time))stats.duration+=Math.max(0,(b.time-a.time)/1000);
     });
-    const liveCanvas=document.createElement('canvas');liveCanvas.width=720;liveCanvas.height=480;const liveTexture=new THREE.CanvasTexture(liveCanvas);liveTexture.colorSpace=THREE.SRGBColorSpace;
+    const liveCanvas=document.createElement('canvas');liveCanvas.width=720;liveCanvas.height=320;const liveTexture=new THREE.CanvasTexture(liveCanvas);liveTexture.colorSpace=THREE.SRGBColorSpace;
     const liveLabel=new THREE.Sprite(new THREE.SpriteMaterial({map:liveTexture,depthTest:false,depthWrite:false,toneMapped:false,fog:false}));
     liveLabel.renderOrder=10000;liveLabel.frustumCulled=false;root.add(liveLabel);
     data.route={root,line,geometry,fatGeometry,material,cursor,motion,liveCanvas,liveTexture,liveLabel,partialIndex:-1};data.routeStats=stats;
@@ -676,6 +680,7 @@ function buildGpxRoutes(){
   const available=Boolean(bestBlock);$('#gpxPlayButton').disabled=!available;$('#gpxProgress').disabled=!available;$('#gpxTarget').disabled=!available;$('#gpxOverviewButton').disabled=!available;
   $('#gpxTarget').innerHTML=available?blocks.filter(block=>block.group.userData.route).map(block=>`<option value="${block.peak.id}">${escapeHtml(block.peak.name)}</option>`).join(''):'<option>Aucun parcours</option>';
   if(available)$('#gpxTarget').value=gpxPlayer.routeBlock.peak.id;
+  rebuildStoryPins();renderStoryEditor();
   refreshStatsBillboards();
 }
 
@@ -698,8 +703,10 @@ function setGpxProgress(progress){
 function toggleGpxAnimation(){
   stopCinema();
   if(!gpxPlayer.routeBlock)return;
-  if(gpxPlayer.playing){stopGpxAnimation();setPlaybackStatus('En pause');return;}
+  if(gpxPlayer.playing){gpxPlayer.playing=false;gpxPlayer.paused=true;controls.enabled=false;$('#gpxPlayButton').textContent='▶ Reprendre';setPlaybackStatus('En pause');return;}
+  if(gpxPlayer.paused){gpxPlayer.paused=false;gpxPlayer.playing=true;$('#gpxPlayButton').textContent='❚❚ Pause';controls.enabled=!gpxPlayer.follow&&!story.active;setPlaybackStatus('Lecture reprise');return;}
   if(gpxPlayer.progress>=.999)setGpxProgress(0);
+  story.visited=storyPinsFor().filter(p=>p.progress<gpxPlayer.progress-1e-9).map(p=>p.id);story.active=null;
   gpxPlayer.playing=true;controls.autoRotate=false;$('#rotateButton').classList.remove('active');
   $('#gpxPlayButton').textContent='❚❚ Pause';gpxPlayer.lastPart=null;
   if(gpxPlayer.follow){
@@ -718,7 +725,8 @@ function releaseCamera(){
 }
 
 function stopGpxAnimation(){
-  stopCinema();
+  cancelStoryPick();stopCinema();
+  gpxPlayer.paused=false;story.active=null;story.visited=[];
   gpxPlayer.playing=false;gpxPlayer.phase='idle';gpxPlayer.transition=null;gpxPlayer.lastPart=null;
   releaseCamera();$('#gpxPlayButton').textContent='▶ Animer';
 }
@@ -749,12 +757,12 @@ function safeCameraHeight(position){
   return result;
 }
 
-function followPose(){
+function followPose(offsetOverride){
   const block=gpxPlayer.routeBlock,route=block?.group.userData.route;if(!route)return null;
   if(!gpxPlayer.offset)captureFollowOffset();
   const point=smoothRoutePoint(route.motion,gpxPlayer.progress*route.motion.total,Math.max(.1,Math.min(.4,route.motion.total*.03)));
   const target=worldRoutePoint(block,point);target.y+=.08;
-  const position=target.clone().addScaledVector(gpxPlayer.offset,globalSettings.gpxFollowDistance);position.y=safeCameraHeight(position);
+  const position=target.clone().addScaledVector(offsetOverride||gpxPlayer.offset,globalSettings.gpxFollowDistance);position.y=safeCameraHeight(position);
   return {position,target};
 }
 
@@ -768,7 +776,7 @@ function beginCameraTransition(pose,duration,phase,onComplete){
 
 function updateCameraTransition(delta){
   const transition=gpxPlayer.transition;if(!transition)return;
-  transition.elapsed+=delta;const t=clamp(transition.elapsed/transition.duration),ease=smootherstep(t);
+  transition.elapsed=Math.min(transition.duration,transition.elapsed+delta);if(transition.duration-transition.elapsed<1e-9)transition.elapsed=transition.duration;const t=clamp(transition.elapsed/transition.duration),ease=smootherstep(t);
   camera.position.lerpVectors(transition.fromPosition,transition.toPosition,ease);
   controls.target.lerpVectors(transition.fromTarget,transition.toTarget,ease);
   // A gentle upward arc keeps the approach/retreat clear of surrounding relief.
@@ -816,7 +824,7 @@ function applyLighting(){
 }
 
 function bindControls(){
-  bindCinemaControls();
+  bindCinemaControls();bindStoryControls();
   bindRange('gpxFollowDistance','gpxFollowDistanceValue',v=>`${v.toFixed(1).replace('.',',')}×`,v=>{
     globalSettings.gpxFollowDistance=clamp(v,.6,4);
     // Retarget an approach from its current pose; steady following uses damping.
@@ -867,19 +875,19 @@ function bindControls(){
   $('#blockComment').addEventListener('input',event=>{settingsFor(editorPeakId).comment=event.target.value;saveProject();clearTimeout(statsTimer);statsTimer=setTimeout(refreshStatsBillboards,180)});
   $('#blockStatsToggle').addEventListener('change',event=>{settingsFor(editorPeakId).showStats=event.target.checked;saveProject();refreshStatsBillboards()});
   $('#gpxColor').addEventListener('input',event=>{const color=event.target.value;settingsFor(editorPeakId).gpxColor=color;const route=blocks.find(block=>block.peak.id===editorPeakId)?.group.userData.route;if(route){route.material.color.set(color);route.cursor.material.color.set(color);}saveProject();});
-  $('#gpxTarget').addEventListener('change',event=>{stopGpxAnimation();gpxPlayer.routeBlock=blocks.find(block=>block.peak.id===event.target.value)||null;gpxPlayer.offset=null;});
+  $('#gpxTarget').addEventListener('change',event=>{stopGpxAnimation();gpxPlayer.routeBlock=blocks.find(block=>block.peak.id===event.target.value)||null;gpxPlayer.offset=null;newStoryDraft();renderStoryEditor();});
   $('#gpxPlayButton').addEventListener('click',toggleGpxAnimation);$('#gpxFollowToggle').checked=gpxPlayer.follow;
   $('#gpxFollowToggle').addEventListener('change',event=>{
-    stopCinema();gpxPlayer.follow=event.target.checked;gpxPlayer.transition=null;
+    stopCinema();if(story.active||gpxPlayer.paused)stopGpxAnimation();gpxPlayer.follow=event.target.checked;gpxPlayer.transition=null;
     if(!gpxPlayer.follow){gpxPlayer.phase=gpxPlayer.playing?'follow':'idle';releaseCamera();setPlaybackStatus('Caméra libre');}
     else if(gpxPlayer.playing){captureFollowOffset();beginCameraTransition(followPose(),1.5,'intro',()=>{gpxPlayer.phase='follow';});}
   });
-  $('#gpxProgress').addEventListener('input',event=>{stopGpxAnimation();setGpxProgress(+event.target.value/1000);if(gpxPlayer.follow&&gpxPlayer.routeBlock){captureFollowOffset();beginCameraTransition(followPose(),.7,'scrub',stopGpxAnimation);}setPlaybackStatus('Position choisie · prêt à reprendre');});
+  $('#gpxProgress').addEventListener('input',event=>{stopGpxAnimation();setGpxProgress(+event.target.value/1000);if(gpxPlayer.follow&&gpxPlayer.routeBlock){captureFollowOffset();beginCameraTransition(followPose(),.7,'scrub',stopGpxAnimation);}$('#storyPosition').value=(gpxPlayer.progress*100).toFixed(2);setPlaybackStatus('Position choisie · prêt à reprendre');});
   $('#gpxDuration').addEventListener('change',event=>gpxPlayer.duration=+event.target.value);
   $('#gpxOverviewButton').addEventListener('click',()=>{stopGpxAnimation();setGpxProgress(1);startRouteOverview();});
   $('#rotateButton').addEventListener('click',()=>{stopCinema();stopGpxAnimation();controls.autoRotate=!controls.autoRotate;$('#rotateButton').classList.toggle('active',controls.autoRotate)});
   $('#resetCameraButton').addEventListener('click',()=>{stopCinema();stopGpxAnimation();fitCamera()});
-  $('#filmButton').addEventListener('click',()=>{document.body.classList.toggle('film-mode');setTimeout(()=>{resize();if(!cinema.playing&&!cinema.paused&&!gpxPlayer.playing&&!gpxPlayer.transition)fitCamera();},80);if(document.body.classList.contains('film-mode'))document.documentElement.requestFullscreen?.().catch(()=>{})});
+  $('#filmButton').addEventListener('click',()=>{document.body.classList.toggle('film-mode');setTimeout(()=>{resize();if(!cinema.playing&&!cinema.paused&&!gpxPlayer.playing&&!gpxPlayer.paused&&!gpxPlayer.transition)fitCamera();},80);if(document.body.classList.contains('film-mode'))document.documentElement.requestFullscreen?.().catch(()=>{})});
   $('#menuButton').addEventListener('click',()=>setPanel(!document.body.classList.contains('panel-open')));$('#closePanelButton').addEventListener('click',()=>setPanel(false));$('#panelScrim').addEventListener('click',()=>setPanel(false));
   document.addEventListener('mountain:create',handleNewPeak);
   $('#gpxInput').addEventListener('change',event=>handleGpxFile(event.target.files[0]));
@@ -914,7 +922,7 @@ async function handleGpxFile(file){
     if(file.size>25*1024*1024)throw Error('Ce GPX dépasse 25 Mo. Simplifie-le avant de l’importer.');
     const imported=parseGpx(await file.text());stopGpxAnimation();gpxTrack=imported;const stats=trackStats(gpxTrack);gpxPlayer.progress=1;gpxPlayer.offset=null;
     $('#gpxStats').textContent=`${gpxTrack.length.toLocaleString('fr-CH')} points · ${stats.distance.toFixed(1)} km · ${stats.hasElevation?`+${Math.round(stats.gain).toLocaleString('fr-CH')} m`:'D+ non renseigné'} (GPX complet)`;$('#gpxStats').classList.add('loaded');
-    buildGpxRoutes();setPlaybackStatus('Tracé complet · Animer pour démarrer depuis la vue actuelle');
+    buildGpxRoutes();newStoryDraft();setPlaybackStatus('Tracé complet · Animer pour démarrer depuis la vue actuelle');
     if(!gpxPlayer.routeBlock)showError('Le GPX est chargé, mais son tracé ne traverse aucune découpe actuellement affichée.');
   }catch(error){showError(error.message)}
 }
@@ -924,12 +932,13 @@ function saveActiveStats(){
 }
 
 function saveProject(){
-  try{localStorage.setItem('mountainAnimatorProjectV3',JSON.stringify({cameraShots,customPeaks:peaks.filter(peak=>!PEAKS.some(item=>item.id===peak.id)),selected,globalSettings,blockSettings:Object.fromEntries(blockSettings)}))}catch{}
+  try{localStorage.setItem('mountainAnimatorProjectV3',JSON.stringify({cameraShots,narrativePins,customPeaks:peaks.filter(peak=>!PEAKS.some(item=>item.id===peak.id)),selected,globalSettings,blockSettings:Object.fromEntries(blockSettings)}))}catch{}
 }
 
 function restoreProject(){
   try{
     const saved=JSON.parse(localStorage.getItem('mountainAnimatorProjectV3')||'null');if(!saved)return;
+    narrativePins=sanitizeStoryPins(saved.narrativePins);
     if(Array.isArray(saved.cameraShots))cameraShots=saved.cameraShots.slice(0,30).filter(s=>['orbit','transfer'].includes(s.type));
     if(Array.isArray(saved.customPeaks))peaks=[...PEAKS,...saved.customPeaks];if(Array.isArray(saved.selected))selected=saved.selected.filter(id=>peaks.some(peak=>peak.id===id)).slice(0,MAX_PEAKS);Object.assign(globalSettings,saved.globalSettings||{});if(!QUALITY[globalSettings.quality])globalSettings.quality='high';
     if(!GROUND_KINDS.includes(globalSettings.groundTexture))globalSettings.groundTexture='marble';
@@ -958,25 +967,31 @@ function animate(){
   requestAnimationFrame(animate);const delta=Math.min(.05,clock.getDelta());
   if(exportSettings)return;
   cloudTime+=delta;if(cinema.playing)advanceCinema(delta);else advancePlayback(delta);
-  if(!cinema.playing&&!gpxPlayer.transition&&(!gpxPlayer.playing||!gpxPlayer.follow))controls.update(delta);
-  updateCloudAnimation();updatePeakLabels();updateLiveStats();updateRouteStyle();renderer.render(scene,camera);
+  if(!cinema.playing&&!gpxPlayer.paused&&!story.active&&!gpxPlayer.transition&&(!gpxPlayer.playing||!gpxPlayer.follow))controls.update(delta);
+  updateCloudAnimation();updatePeakLabels();updateLiveStats();updateStoryVisuals();updateRouteStyle();renderer.render(scene,camera);
 }
 
 function advancePlayback(delta){
-  if(gpxPlayer.transition){updateCameraTransition(delta);return;}
-  if(!gpxPlayer.playing||gpxPlayer.phase!=='follow')return;
-  setGpxProgress(gpxPlayer.progress+delta/gpxPlayer.duration);
-  if(gpxPlayer.follow){
-    const route=gpxPlayer.routeBlock?.group.userData.route;
-    const sample=route&&sampleRoute(route.motion,route.motion.total*gpxPlayer.progress);
-    if(sample&&gpxPlayer.lastPart!==null&&sample.part!==gpxPlayer.lastPart){
-      beginCameraTransition(followPose(),1,'intro',()=>{gpxPlayer.phase='follow';});
-    }else updateFollowCamera(delta);
-    gpxPlayer.lastPart=sample?.part??null;
-  }
-  if(gpxPlayer.progress>=1){
-    if(gpxPlayer.follow)startRouteOverview();
-    else{stopGpxAnimation();setPlaybackStatus('Parcours terminé · caméra libre');}
+  if(gpxPlayer.paused)return;
+  let remaining=Math.max(0,delta),guard=0;
+  // Consume the full film timestep, including stops at 0% and 100%.
+  while(remaining>1e-9&&guard++<100){
+    if(gpxPlayer.transition){const transition=gpxPlayer.transition,dt=Math.min(remaining,Math.max(0,transition.duration-transition.elapsed));updateCameraTransition(dt);remaining-=dt;continue;}
+    if(!gpxPlayer.playing)return;
+    if(story.active){const dt=Math.min(remaining,story.active.duration-story.active.elapsed);advanceStoryStop(dt);remaining-=dt;continue;}
+    if(gpxPlayer.phase!=='follow')return;
+    const end=Math.min(1,gpxPlayer.progress+remaining/gpxPlayer.duration);
+    const pin=globalSettings.storyEnabled?nextStoryPin(storyPinsFor(),story.visited,gpxPlayer.progress,end):null;
+    const progress=pin?pin.progress:end,dt=Math.max(0,(progress-gpxPlayer.progress)*gpxPlayer.duration);
+    setGpxProgress(progress);remaining=Math.max(0,remaining-dt);
+    if(pin){beginStoryStop(pin);continue;}
+    if(gpxPlayer.follow){
+      const route=gpxPlayer.routeBlock?.group.userData.route,sample=route&&sampleRoute(route.motion,route.motion.total*gpxPlayer.progress);
+      if(sample&&gpxPlayer.lastPart!==null&&sample.part!==gpxPlayer.lastPart)beginCameraTransition(followPose(),1,'intro',()=>{gpxPlayer.phase='follow';});
+      else updateFollowCamera(dt);
+      gpxPlayer.lastPart=sample?.part??null;
+    }
+    if(gpxPlayer.progress>=1){if(gpxPlayer.follow)startRouteOverview();else{stopGpxAnimation();setPlaybackStatus('Parcours terminé · caméra libre');}}
   }
 }
 
@@ -999,6 +1014,7 @@ function lockExportControls(locked){
 
 function saveExportView(){
   return {dpr:renderer.getPixelRatio(),position:camera.position.clone(),target:controls.target.clone(),
+    story:{visited:[...story.visited],active:story.active?{...story.active,fromPosition:story.active.fromPosition.clone(),fromTarget:story.active.fromTarget.clone(),offset:story.active.offset.clone(),exitOffset:story.active.exitOffset.clone(),target:story.active.target.clone()}:null},
     cinema:{...cinema},far:camera.far,maxDistance:controls.maxDistance,cloudTime,autoRotate:controls.autoRotate,enabled:controls.enabled,
     damping:controls.enableDamping,player:{...gpxPlayer,offset:gpxPlayer.offset?.clone(),
     transition:gpxPlayer.transition?{...gpxPlayer.transition,fromPosition:gpxPlayer.transition.fromPosition.clone(),fromTarget:gpxPlayer.transition.fromTarget.clone(),toPosition:gpxPlayer.transition.toPosition.clone(),toTarget:gpxPlayer.transition.toTarget.clone()}:null},
@@ -1027,7 +1043,8 @@ async function runVideoExport(){
     else if(mode==='gpx'){
       stopGpxAnimation();setGpxProgress(0);gpxPlayer.follow=true;toggleGpxAnimation();
       const parts=new Set(gpxPlayer.routeBlock.group.userData.route.motion.segments.map(edge=>edge.part)).size;
-      duration=gpxPlayer.duration+2.4+3+Math.max(0,parts-1)+.5;
+      duration=gpxPlayer.duration+2.4+3+Math.max(0,parts-1)+.5+(globalSettings.storyEnabled?storyPinsFor().reduce((sum,p)=>sum+stopDuration(p),0):0);
+      if(duration>300)throw Error('Le film dépasse 5 minutes avec les étapes. Réduis les pauses, orbites ou la durée du parcours.');
     }else if(mode==='rotation'||mode==='still'){stopCinema();stopGpxAnimation();}
     controls.enabled=false;controls.enableDamping=false;
     const orbit=camera.position.clone().sub(controls.target),rotationTarget=controls.target.clone();
@@ -1046,7 +1063,7 @@ async function runVideoExport(){
             camera.position.copy(orbit).applyAxisAngle(new THREE.Vector3(0,1,0),-time*2*Math.PI/60*controls.autoRotateSpeed).add(rotationTarget);camera.lookAt(controls.target);
           }
         }
-        updateCloudAnimation();updatePeakLabels.next=0;updatePeakLabels();updateLiveStats();updateRouteStyle();renderer.render(scene,camera);
+        updateCloudAnimation();updatePeakLabels.next=0;updatePeakLabels();updateLiveStats();updateStoryVisuals();updateRouteStyle();renderer.render(scene,camera);
         exportContext.fillStyle='#142631';exportContext.fillRect(0,0,width,height);exportContext.drawImage(canvas,0,0);drawExportLabels();
       },onProgress:(frame,total)=>{
         const elapsed=(performance.now()-started)/1000,eta=elapsed/frame*(total-frame);
@@ -1063,7 +1080,7 @@ async function runVideoExport(){
 
 function restoreExportView(){
   const saved=exportSettings;if(!saved)return;
-  Object.assign(cinema,saved.cinema);Object.assign(gpxPlayer,saved.player);setGpxProgress(saved.player.progress);
+  Object.assign(story,saved.story);Object.assign(cinema,saved.cinema);Object.assign(gpxPlayer,saved.player);setGpxProgress(saved.player.progress);
   $('#cinemaStatus').textContent=saved.cinemaStatus;$('#cinemaPause').textContent=saved.cinemaPause;
   controls.autoRotate=false;controls.enableDamping=false;controls.update(0);
   camera.position.copy(saved.position);controls.target.copy(saved.target);camera.lookAt(controls.target);controls.update(0);
@@ -1071,7 +1088,7 @@ function restoreExportView(){
   controls.autoRotate=saved.autoRotate;controls.enabled=saved.enabled;controls.enableDamping=saved.damping;
   controls.maxDistance=saved.maxDistance;camera.far=saved.far;
   cloudTime=saved.cloudTime;updateCloudAnimation();updatePeakLabels.next=0;
-  $('#gpxPlayButton').textContent=gpxPlayer.playing?'❚❚ Pause':'▶ Animer';$('#rotateButton').classList.toggle('active',saved.autoRotate);setPlaybackStatus(saved.playbackStatus);
+  $('#gpxPlayButton').textContent=gpxPlayer.playing?'❚❚ Pause':gpxPlayer.paused?'▶ Reprendre':'▶ Animer';$('#rotateButton').classList.toggle('active',saved.autoRotate);setPlaybackStatus(saved.playbackStatus);
   renderer.setPixelRatio(saved.dpr);exportSettings=null;resize();lockExportControls(false);updateRouteStyle();clock.getDelta();
 }
 function drawExportLabels(){
@@ -1108,30 +1125,26 @@ function updateRouteStyle(){
   const h=exportSettings?exportCanvas?.height||1080:stage.clientHeight;
   blocks.forEach(block=>{const route=block.group.userData.route;if(!route)return;route.material.linewidth=block.config.gpxWidth*h/1080;route.material.resolution.set(exportSettings?exportCanvas?.width||1920:stage.clientWidth,h);});
 }
+function overlayDimensions(){return {width:exportSettings?exportCanvas?.width||1920:stage.clientWidth,height:exportSettings?exportCanvas?.height||1080:stage.clientHeight};}
+function placeOverlay(sprite,block,x,y,w,h,width,height){
+  const center=new THREE.Vector3(x/width*2-1,1-y/height*2,0).unproject(camera);
+  const depth=-center.clone().applyMatrix4(camera.matrixWorldInverse).z;
+  sprite.position.copy(block.group.worldToLocal(center));
+  const scale=2*depth*Math.tan(THREE.MathUtils.degToRad(camera.fov)/2)/height;sprite.scale.set(w*scale,h*scale,1);
+}
 function updateLiveStats(){
-  camera.updateMatrixWorld(true);
-  const width=exportSettings?exportCanvas?.width||1920:stage.clientWidth,height=exportSettings?exportCanvas?.height||1080:stage.clientHeight;
-  if(!width||!height)return;
-  // Fixed readable screen size, also proportional to the output in 4K exports.
-  const unit=exportSettings?height/1080:1,cardWidth=Math.min(220*unit,width*.55),cardHeight=cardWidth*2/3,gap=14*unit,margin=8*unit;
+  camera.updateMatrixWorld(true);const {width,height}=overlayDimensions();if(!width||!height)return;
+  const unit=exportSettings?height/1080:1,w=Math.min(185*unit,width*.47),h=w*320/720;
   blocks.forEach(block=>{
     const route=block.group.userData.route;if(!route)return;
-    route.liveLabel.visible=block.config.gpxLiveStats;if(!block.config.gpxLiveStats)return;
+    route.liveLabel.visible=block.config.gpxLiveStats&&block===gpxPlayer.routeBlock;if(!route.liveLabel.visible)return;
     const metrics=routeMetrics(route.motion,gpxPlayer.progress*route.motion.total,globalSettings.exaggeration);
     const text=`${Math.round(metrics.altitude)}|D+ ${metrics.gain===null?'—':Math.round(metrics.gain)}|${metrics.distance.toFixed(2)}`;
     if(route.liveText!==text){paintLiveGpxCard(route.liveCanvas,metrics);route.liveTexture.needsUpdate=true;route.liveText=text;}
-    const world=block.group.localToWorld(route.cursor.position.clone()),depth=-world.clone().applyMatrix4(camera.matrixWorldInverse).z,anchor=world.project(camera);
-    if(depth<=camera.near||depth>=camera.far){route.liveLabel.visible=false;return;}
-    const px=(anchor.x+1)*width/2,py=(1-anchor.y)*height/2;
-    const side=px+gap+cardWidth<=width-margin?1:-1;
-    const x=clamp(px+side*(gap+cardWidth/2),margin+cardWidth/2,width-margin-cardWidth/2);
-    const y=clamp(py-cardHeight*.25,margin+cardHeight/2,height-margin-cardHeight/2);
-    const center=new THREE.Vector3(x/width*2-1,1-y/height*2,anchor.z).unproject(camera);
-    route.liveLabel.position.copy(block.group.worldToLocal(center));
-    const worldPerPixel=2*depth*Math.tan(THREE.MathUtils.degToRad(camera.fov)/2)/height;
-    route.liveLabel.scale.set(cardWidth*worldPerPixel,cardHeight*worldPerPixel,1);
+    placeOverlay(route.liveLabel,block,14*unit+w/2,height-34*unit-h/2,w,h,width,height);
   });
 }
+
 function mountainCameraPose(id,spec={}){
   const block=blocks.find(b=>b.peak.id===id);if(!block)throw Error('Une montagne de la séquence n’est plus affichée.');
   const bounds=new THREE.Box3().setFromObject(block.group.userData.top),target=bounds.getCenter(new THREE.Vector3()),radius=bounds.getSize(new THREE.Vector3()).length()*.5;
@@ -1198,4 +1211,115 @@ function bindCinemaControls(){
     else if(cinema.paused&&cinema.time<cinema.timeline.duration){cinema.playing=true;cinema.paused=false;controls.enabled=false;$('#cinemaPause').textContent='Pause';}
   });
   syncCinemaEditor();
+}
+
+function storyPinsFor(block=gpxPlayer.routeBlock){return block?.group.userData.route?.storyPins||[];}
+function rebuildStoryPins(){
+  blocks.forEach(block=>{
+    const route=block.group.userData.route;if(!route)return;
+    if(route.storyRoot){route.root.remove(route.storyRoot);disposeObject(route.storyRoot);}
+    route.storyRoot=new THREE.Group();route.root.add(route.storyRoot);route.storyPins=[];
+    narrativePins.filter(p=>p.track===storyTrackKey&&p.block===block.peak.id).forEach(saved=>{
+      const closest=nearestRoutePoint(route.motion,localPointForGeo(saved,block.data),saved.progress);
+      if(!closest||closest.error>.015)return; // Outside this cutout: never move a pin to another summit.
+      const sample=sampleRoute(route.motion,closest.progress*route.motion.total),pin={...saved,progress:closest.progress,point:new THREE.Vector3(sample.point.x,sample.point.y,sample.point.z)};
+      const marker=new THREE.Group();marker.position.copy(pin.point);
+      const material=new THREE.MeshBasicMaterial({color:0xf3d695,toneMapped:false,transparent:true,depthWrite:false});
+      const stem=new THREE.Mesh(new THREE.CylinderGeometry(.008,.008,.20,6),material);stem.position.y=.10;
+      const head=new THREE.Mesh(new THREE.SphereGeometry(.043,12,8),material);head.position.y=.22;marker.add(stem,head);route.storyRoot.add(marker);
+      const card=document.createElement('canvas');card.width=900;card.height=440;paintStoryLabel(card,pin);
+      const texture=new THREE.CanvasTexture(card);texture.colorSpace=THREE.SRGBColorSpace;
+      const label=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,depthTest:false,depthWrite:false,toneMapped:false,fog:false}));label.renderOrder=10002;label.frustumCulled=false;label.visible=false;route.storyRoot.add(label);
+      const leader=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]),new THREE.LineBasicMaterial({color:0xffffff,depthTest:false,depthWrite:false,transparent:true,toneMapped:false,fog:false}));leader.renderOrder=10001;leader.frustumCulled=false;leader.visible=false;route.storyRoot.add(leader);
+      route.storyPins.push({...pin,marker,label,leader});
+    });
+    route.storyPins.sort((a,b)=>a.progress-b.progress||a.id.localeCompare(b.id));
+  });
+}
+function newStoryDraft(){storyEditingId=null;$('#storyPosition').value=(gpxPlayer.progress*100).toFixed(2);$('#storyName').value='';$('#storyComment').value='';$('#storySave').textContent='Ajouter cette étape';}
+function renderStoryEditor(){
+  const block=gpxPlayer.routeBlock,pins=storyPinsFor();const available=!!block;
+  $('#storySave').disabled=!available;$('#storyPick').disabled=!available;
+  const all=narrativePins.filter(p=>p.track===storyTrackKey&&p.block===block?.peak.id);
+  $('#storyList').innerHTML=pins.map((p,i)=>`<li><span>${i+1}. ${escapeHtml(p.name)} · ${(p.progress*100).toFixed(1)} % · pause ${p.pause}s${p.angle?` + orbite ${p.angle}° / ${p.orbitDuration}s`:''}</span><div><button type="button" data-story-edit="${escapeHtml(p.id)}">Modifier / voir</button><button type="button" data-story-delete="${escapeHtml(p.id)}">Supprimer</button></div></li>`).join('');
+  $('#storyStatus').textContent=available?`${pins.length} étapes · +${pins.reduce((sum,p)=>sum+stopDuration(p),0).toFixed(1)} s avec transitions${all.length>pins.length?' · certaines étapes sont hors de la découpe':''}`:'Importe un GPX pour placer des étapes.';
+  document.querySelectorAll('[data-story-edit]').forEach(button=>button.addEventListener('click',()=>{
+    const pin=pins.find(p=>p.id===button.dataset.storyEdit);stopGpxAnimation();setGpxProgress(pin.progress);storyEditingId=pin.id;
+    $('#storyPosition').value=(pin.progress*100).toFixed(4);$('#storyName').value=pin.name;$('#storyComment').value=pin.comment;$('#storyPause').value=pin.pause;$('#storyAngle').value=pin.angle;$('#storyOrbitDuration').value=pin.orbitDuration;$('#storySave').textContent='Enregistrer cette étape';
+    if(gpxPlayer.follow){captureFollowOffset();beginCameraTransition(followPose(),.7,'scrub',()=>{gpxPlayer.phase='idle';releaseCamera();});}
+  }));
+  document.querySelectorAll('[data-story-delete]').forEach(button=>button.addEventListener('click',()=>{stopGpxAnimation();narrativePins=narrativePins.filter(p=>p.id!==button.dataset.storyDelete);newStoryDraft();rebuildStoryPins();renderStoryEditor();saveProject();}));
+}
+function saveStoryPin(){
+  const block=gpxPlayer.routeBlock,route=block?.group.userData.route;if(!route)return;
+  for(const id of ['storyPosition','storyName','storyPause','storyOrbitDuration'])if(!$('#'+id).reportValidity())return;
+  const name=$('#storyName').value.trim();if(!name){showError('Donne un nom à cette étape.');$('#storyName').focus();return;}
+  if(!storyEditingId&&storyPinsFor().length>=20){showError('Maximum 20 étapes par parcours et par montagne.');return;}
+  const progress=clamp(Number($('#storyPosition').value)/100),sample=sampleRoute(route.motion,progress*route.motion.total),edge=route.motion.segments[sample.index];
+  const geo=interpolateGeo(edge.fromGeo,edge.toGeo,sample.t);
+  const pin={id:storyEditingId||`pin-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,track:storyTrackKey,block:block.peak.id,lat:geo.lat,lon:geo.lon,progress,name,comment:$('#storyComment').value.trim(),pause:clamp(+$('#storyPause').value,0,30),angle:+$('#storyAngle').value,orbitDuration:clamp(+$('#storyOrbitDuration').value,2,30)};
+  stopGpxAnimation();narrativePins=narrativePins.filter(p=>p.id!==pin.id);narrativePins.push(pin);setGpxProgress(progress);rebuildStoryPins();newStoryDraft();renderStoryEditor();saveProject();
+}
+function bindStoryControls(){
+  $('#storyEnabled').checked=globalSettings.storyEnabled;
+  $('#storyEnabled').addEventListener('change',e=>{stopGpxAnimation();globalSettings.storyEnabled=e.target.checked;saveProject();});
+  $('#storySave').addEventListener('click',saveStoryPin);$('#storyNew').addEventListener('click',newStoryDraft);
+  $('#storyPosition').addEventListener('change',()=>{if(!gpxPlayer.routeBlock||!$('#storyPosition').checkValidity())return;stopGpxAnimation();setGpxProgress(clamp(+$('#storyPosition').value/100));});
+  $('#storyPick').addEventListener('click',()=>{
+    if(storyPicking){cancelStoryPick();return;}
+    if(!gpxPlayer.routeBlock)return;stopGpxAnimation();storyPicking=true;canvas.style.cursor=storyPicking?'crosshair':'';
+    $('#storyPick').textContent=storyPicking?'Annuler le placement':'Choisir un point sur la trace';if(storyPicking){setPanel(false);setPlaybackStatus('Touche la trace à l’endroit de l’étape · Échap pour annuler');}
+  });
+  let down=null;
+  canvas.addEventListener('pointerdown',e=>{down={x:e.clientX,y:e.clientY};});
+  canvas.addEventListener('pointerup',e=>{
+    if(!storyPicking||!down||Math.hypot(e.clientX-down.x,e.clientY-down.y)>6)return;
+    const block=gpxPlayer.routeBlock;if(!block)return;
+    const rect=canvas.getBoundingClientRect(),ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2((e.clientX-rect.left)/rect.width*2-1,1-(e.clientY-rect.top)/rect.height*2),camera);
+    const hit=ray.intersectObject(block.group.userData.top)[0];if(!hit){showError('Touche la trace sur la montagne suivie.');return;}
+    const closest=nearestRoutePoint(block.group.userData.route.motion,block.group.worldToLocal(hit.point.clone()),gpxPlayer.progress);
+    if(!closest||closest.error>Math.max(.15,block.data.size*.025)){showError('Touche plus près du tracé GPX.');return;}
+    setGpxProgress(closest.progress);$('#storyPosition').value=(closest.progress*100).toFixed(4);cancelStoryPick();setPanel(true);$('#storyEditor').open=true;$('#storyName').focus();
+  });
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&storyPicking)cancelStoryPick();});renderStoryEditor();
+}
+function cancelStoryPick(){storyPicking=false;canvas.style.cursor='';$('#storyPick').textContent='Choisir un point sur la trace';}
+function beginStoryStop(pin){
+  if(!gpxPlayer.follow){const damping=controls.enableDamping;releaseCamera();controls.enableDamping=damping;}
+  if(!gpxPlayer.offset)captureFollowOffset();
+  const target=worldRoutePoint(gpxPlayer.routeBlock,pin.point);target.y+=.08;
+  const offset=gpxPlayer.offset.clone(),exitOffset=offset.clone().applyAxisAngle(new THREE.Vector3(0,1,0),THREE.MathUtils.degToRad(pin.angle));
+  story.visited.push(pin.id);story.active={pin,zoom:globalSettings.gpxFollowDistance,elapsed:0,duration:stopDuration(pin),target,offset,exitOffset,fromPosition:camera.position.clone(),fromTarget:controls.target.clone(),moveCamera:gpxPlayer.follow||Boolean(pin.angle)};
+  gpxPlayer.phase='stop';controls.enabled=false;setPlaybackStatus(`Étape · ${pin.name}`);
+}
+function advanceStoryStop(delta){
+  const a=story.active;if(!a)return;a.elapsed=Math.min(a.duration,a.elapsed+delta);a.zoom+=(globalSettings.gpxFollowDistance-a.zoom)*dampingAlpha(delta,.65);
+  if(a.moveCamera){
+    const t=a.elapsed,orbitTime=a.pin.angle?a.pin.orbitDuration:0,orbitStart=1.2+a.pin.pause,orbitEnd=orbitStart+orbitTime;
+    const progress=orbitTime?smootherstep((t-orbitStart)/orbitTime):0;
+    const offset=a.offset.clone().applyAxisAngle(new THREE.Vector3(0,1,0),THREE.MathUtils.degToRad(a.pin.angle)*progress).multiplyScalar(a.zoom);
+    const target=a.target.clone(),position=target.clone().add(offset);position.y=safeCameraHeight(position);
+    if(t<1.2){const f=smootherstep(t/1.2);position.lerpVectors(a.fromPosition,position,f);target.lerpVectors(a.fromTarget,target,f);}
+    else if(t>orbitEnd){const pose=followPose(a.exitOffset),f=smootherstep((t-orbitEnd)/1.2);position.lerp(pose.position,f);target.lerp(pose.target,f);}
+    camera.position.copy(position);camera.position.y=safeCameraHeight(camera.position);controls.target.copy(target);camera.lookAt(target);
+    controls.maxDistance=Math.max(controls.maxDistance,position.distanceTo(target)*1.2);camera.far=Math.max(camera.far,controls.maxDistance*2);camera.updateProjectionMatrix();
+  }
+  if(a.elapsed>=a.duration-1e-9){if(a.moveCamera)gpxPlayer.offset.copy(a.exitOffset);story.active=null;gpxPlayer.phase='follow';controls.enabled=!gpxPlayer.follow;gpxPlayer.lastPart=null;setPlaybackStatus('Lecture · reprise du parcours');}
+}
+function updateStoryVisuals(){
+  camera.updateMatrixWorld(true);const {width,height}=overlayDimensions();if(!width||!height)return;
+  const unit=exportSettings?height/1080:1,w=Math.min(230*unit,width*.6),h=w*440/900,margin=12*unit;
+  blocks.forEach(block=>storyPinsFor(block).forEach(pin=>{
+    const active=story.active?.pin.id===pin.id,material=pin.marker.children[0].material;
+    material.depthTest=!active;pin.marker.children.forEach(child=>child.renderOrder=active?10000:0);
+    pin.label.visible=pin.leader.visible=active;if(!active)return;
+    const a=story.active,opacity=Math.min(1,a.elapsed/.45,(a.duration-a.elapsed)/.45);pin.label.material.opacity=pin.leader.material.opacity=clamp(opacity);
+    const anchor=block.group.localToWorld(pin.point.clone().add(new THREE.Vector3(0,.22,0))),projected=anchor.clone().project(camera);
+    if(projected.z<-1||projected.z>1){pin.label.visible=pin.leader.visible=false;return;}
+    const x=clamp((projected.x+1)*width/2+35*unit+w/2,margin+w/2,width-margin-w/2),y=clamp((1-projected.y)*height/2-45*unit-h/2,margin+h/2,height-margin-h/2);
+    placeOverlay(pin.label,block,x,y,w,h,width,height);
+    const tipX=clamp((projected.x+1)*width/2,x-w*.4,x+w*.4);
+    const tip=new THREE.Vector3(tipX/width*2-1,1-(y+h*.45)/height*2,0).unproject(camera),positions=pin.leader.geometry.attributes.position;
+    positions.setXYZ(0,pin.point.x,pin.point.y+.22,pin.point.z);const local=block.group.worldToLocal(tip);positions.setXYZ(1,local.x,local.y,local.z);positions.needsUpdate=true;
+  }));
 }

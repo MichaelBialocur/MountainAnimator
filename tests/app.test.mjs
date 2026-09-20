@@ -21,14 +21,14 @@ test('GPX distance widens the camera smoothly during approach and following, and
  const saved=JSON.parse(app.window.localStorage.getItem('mountainAnimatorProjectV3'));near(saved.globalSettings.gpxFollowDistance,4);const restored=appHarness(saved);near(restored.globalSettings.gpxFollowDistance,4);restored.dom.window.close();app.dom.window.close();
 });
 
-test('live GPX card is an overlay with three rows and keeps its screen size across zooms',()=>{
+test('live GPX text stays in the same screen corner across zooms and route progress',()=>{
  const app=appHarness(),block=app.syntheticBlock();app.gpxTrack=routePoints();app.buildGpxRoutes();block.config.gpxLiveStats=true;app.setGpxProgress(.5);
  const route=block.group.userData.route;app.camera.position.set(0,14,26);app.controls.target.set(0,2,0);app.camera.lookAt(app.controls.target);app.updateLiveStats();
  assert.equal(route.liveLabel.material.depthTest,false);assert.equal(route.liveLabel.material.depthWrite,false);assert.equal(route.liveLabel.material.fog,false);assert.ok(route.liveLabel.renderOrder>100);
- const words=route.liveCanvas.getContext('2d').text;for(const label of ['Altitude','Dénivelé +','Distance'])assert.ok(words.includes(label));
+ const words=route.liveCanvas.getContext('2d').text;for(const label of ['Altitude','Dénivelé +','Distance'])assert.ok(words.some(text=>text.startsWith(label)));
  const projectedWidth=()=>{const center=route.liveLabel.getWorldPosition(new THREE.Vector3()),depth=-center.clone().applyMatrix4(app.camera.matrixWorldInverse).z;return route.liveLabel.scale.x/depth/(2*Math.tan(THREE.MathUtils.degToRad(app.camera.fov)/2))*750;};
- near(projectedWidth(),220);app.camera.position.multiplyScalar(3);app.camera.lookAt(app.controls.target);app.updateLiveStats();near(projectedWidth(),220);
- const p=route.liveLabel.getWorldPosition(new THREE.Vector3()).project(app.camera);assert.ok(Math.abs(p.x)+220/1200<1);assert.ok(Math.abs(p.y)+(220*2/3)/750<1);app.dom.window.close();
+ near(projectedWidth(),185);const originalScreen=route.liveLabel.getWorldPosition(new THREE.Vector3()).project(app.camera);app.setGpxProgress(.9);app.camera.position.multiplyScalar(3);app.camera.lookAt(app.controls.target);app.updateLiveStats();near(projectedWidth(),185);
+ const p=route.liveLabel.getWorldPosition(new THREE.Vector3()).project(app.camera);near(p.x,originalScreen.x);near(p.y,originalScreen.y);assert.ok(Math.abs(p.x)+185/1200<1);assert.ok(Math.abs(p.y)+(185*320/720)/750<1);app.dom.window.close();
 });
 
 test('GPX parsing preserves recording breaks, missing elevations and namespaced elements',()=>{
