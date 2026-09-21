@@ -1,8 +1,9 @@
-import { createTravelBook, cleanBookPages, sampleBookReading, PAGE_TURN_SECONDS } from './travel-book.mjs?v=11';
-import { mediaImage, importMedia, prepareMedia, validMediaId } from './narrative-media.mjs?v=11';
+import {projectSession} from './project-store.mjs?v=12';
+import { createTravelBook, cleanBookPages, sampleBookReading, sampleBookNarration, bookNarrationDuration, PAGE_TURN_SECONDS, BOOK_OPEN_SECONDS, BOOK_CLOSE_SECONDS } from './travel-book.mjs?v=12';
+import { mediaImage, importMedia, prepareMedia, validMediaId } from './narrative-media.mjs?v=12';
 import { trackFingerprint, nearestRoutePoint, stopDuration, nextStoryPin, sanitizeStoryPins } from './gpx-story.mjs?v=11';
 import { decodeTerrarium, sampleNumericTiles, cleanTerrain } from './terrain-data.mjs?v=7';
-import { compileCameraSequence, sampleCameraSequence } from './camera-sequence.mjs?v=11';
+import { compileCameraSequence, sampleCameraSequence } from './camera-sequence.mjs?v=12';
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
@@ -11,7 +12,7 @@ import { VideoExport, supportedVideoTypes, videoDimensions } from './video-expor
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { clamp, smootherstep, dampingAlpha, distanceKm, measureRoute, sampleRoute, smoothRoutePoint, clipToBounds, pointInOutline, interpolateGeo, routeMetrics } from './route-motion.mjs?v=7';
-import { paintGround, paintTravelNotebook, paintLiveGpxCard, paintStoryLabel, paintBookSpread, paintStoryPhoto, GROUND_KINDS } from './studio-art.mjs?v=11';
+import { paintGround, paintTravelNotebook, paintLiveGpxCard, paintStoryLabel, paintBookSpread, paintStoryPhoto, paintBookCover, GROUND_KINDS } from './studio-art.mjs?v=12';
 
 const PEAKS = [
   { id:'chavalard', name:'Grand Chavalard', elevation:2899, lat:46.17869, lon:7.11312, region:'Fully' },
@@ -47,6 +48,7 @@ let selected = ['chavalard','lagginhorn'];
 let editorPeakId = selected[0];
 let blocks = [];
 let gpxTrack = [];
+let gpxSource=null,restoredView=null,restoredPlayback=null;
 let buildVersion = 0;
 let rebuildTimer;
 let statsTimer;
@@ -110,10 +112,12 @@ resize();
 rebuildScene();
 
 const clock = new THREE.Clock();
+window.mountainWorkspace={snapshot:projectSnapshot,busy:()=>Boolean(exportSettings||mediaBusy||!$('#loadingPanel').hidden),thumbnail:projectThumbnail};
+controls.addEventListener('end',()=>{if(!cinema.playing&&!gpxPlayer.playing&&!exportSettings)saveProject();});
 requestAnimationFrame(animate);
 
 function defaultBlockSettings(){
-  return { bookPages:[], bookIndex:0, bookHold:7, gpxWidth:4, notebookLayout:1, snowCoverage:.68, snowEnabled:false, snowAltitude:2800, statsX:0, statsY:0, statsZ:0, diameter:12, centerEast:0, centerNorth:0, rotation:0, gpxColor:'#e76f32', comment:'', showStats:true, manualDistance:'', manualGain:'', manualDuration:'', manualDate:'', manualNotes:'' };
+  return { bookOpenAtStart:false, bookCloseAtEnd:false, bookCoverTitle:'', bookCoverSubtitle:'', bookCoverColor:'#334e43', bookCoverImage:'', bookPages:[], bookIndex:0, bookHold:7, gpxWidth:4, notebookLayout:1, snowCoverage:.68, snowEnabled:false, snowAltitude:2800, statsX:0, statsY:0, statsZ:0, diameter:12, centerEast:0, centerNorth:0, rotation:0, gpxColor:'#e76f32', comment:'', showStats:true, manualDistance:'', manualGain:'', manualDuration:'', manualDate:'', manualNotes:'' };
 }
 
 function settingsFor(id){
@@ -245,6 +249,7 @@ async function rebuildScene(){
   buildGpxRoutes();
   createPeakLabels();
   fitCamera();
+  if(restoredView){const v=restoredView;restoredView=null;if(v.position?.length===3&&v.target?.length===3&&[...v.position,...v.target].every(Number.isFinite)){camera.position.fromArray(v.position);controls.target.fromArray(v.target);camera.lookAt(controls.target);controls.update(0);}}
   hideLoading();
   if(results.some(Boolean)&&results.some(value=>!value)) showError('Certaines découpes n’ont pas chargé. Vérifie la connexion puis modifie légèrement un réglage pour réessayer.');
 }
@@ -553,8 +558,8 @@ function refreshStatsBillboards(){
     if(data.statsLeader){block.group.remove(data.statsLeader);disposeObject(data.statsLeader);data.statsLeader=null;}
     if(!block.config.showStats)return;
     const w=Math.min(5.8,Math.max(4.6,block.data.size*.42));
-    const book=createTravelBook({document,width:w,height:w*2/3,spreadCount:1+block.config.bookPages.length,paintSpread:index=>makeBookSpread(block,index),anisotropy:Math.min(8,renderer.capabilities.getMaxAnisotropy())});
-    book.userData.setState(block.config.bookIndex||0);
+    const book=createTravelBook({document,width:w,height:w*2/3,spreadCount:1+block.config.bookPages.length,paintSpread:index=>makeBookSpread(block,index),paintCover:()=>makeCoverCanvas(block),anisotropy:Math.min(8,renderer.capabilities.getMaxAnisotropy())});
+    book.userData.setState(block.config.bookIndex||0);book.userData.setOpenness(block.config.bookOpenAtStart?0:1);
     block.group.add(book);data.statsCard=book;positionNotebook(block);
   });
   fitTerrainShadows();
@@ -651,7 +656,7 @@ function routeEdgesForBlock(block){
 
 function buildGpxRoutes(){
   storyTrackKey=trackFingerprint(gpxTrack);
-  const previousId=gpxPlayer.routeBlock?.peak.id;let bestBlock=null,bestLength=0;
+  const previousId=gpxPlayer.routeBlock?.peak.id||restoredPlayback?.target;let bestBlock=null,bestLength=0;
   blocks.forEach(block=>{
     const data=block.group.userData,old=data.route;
     if(old){block.group.remove(old.root);disposeObject(old.root);old.geometry.dispose();data.route=null;data.routeStats=null;}
@@ -890,12 +895,13 @@ function bindControls(){
   $('#rotateButton').addEventListener('click',()=>{stopCinema();stopGpxAnimation();controls.autoRotate=!controls.autoRotate;$('#rotateButton').classList.toggle('active',controls.autoRotate)});
   $('#resetCameraButton').addEventListener('click',()=>{stopCinema();stopGpxAnimation();fitCamera()});
   $('#filmButton').addEventListener('click',()=>{document.body.classList.toggle('film-mode');setTimeout(()=>{resize();if(!cinema.playing&&!cinema.paused&&!gpxPlayer.playing&&!gpxPlayer.paused&&!gpxPlayer.transition)fitCamera();},80);if(document.body.classList.contains('film-mode'))document.documentElement.requestFullscreen?.().catch(()=>{})});
-  $('#menuButton').addEventListener('click',()=>setPanel(!document.body.classList.contains('panel-open')));$('#closePanelButton').addEventListener('click',()=>setPanel(false));$('#panelScrim').addEventListener('click',()=>setPanel(false));
+  // The sidebar also works if WebGL cannot start (bound in panel-sections.mjs).
   document.addEventListener('mountain:create',handleNewPeak);
   $('#gpxInput').addEventListener('change',event=>handleGpxFile(event.target.files[0]));
   const drop=$('#dropZone');['dragenter','dragover'].forEach(type=>drop.addEventListener(type,event=>{event.preventDefault();drop.classList.add('dragging')}));['dragleave','drop'].forEach(type=>drop.addEventListener(type,event=>{event.preventDefault();drop.classList.remove('dragging')}));drop.addEventListener('drop',event=>handleGpxFile(event.dataTransfer.files[0]));
   $('#saveButton').addEventListener('click',saveActiveStats);window.addEventListener('resize',resize);canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();showError('Le moteur 3D a perdu le contexte graphique. Recharge la page ou baisse la qualité.')});
   document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement)document.body.classList.remove('film-mode');setTimeout(resize,50)});
+  restoreProjectControls();
 }
 
 function bindRange(id,outputId,formatter,onInput){
@@ -922,9 +928,9 @@ async function handleGpxFile(file){
   if(!file)return;
   try{
     if(file.size>25*1024*1024)throw Error('Ce GPX dépasse 25 Mo. Simplifie-le avant de l’importer.');
-    const imported=parseGpx(await file.text());stopGpxAnimation();gpxTrack=imported;const stats=trackStats(gpxTrack);gpxPlayer.progress=1;gpxPlayer.offset=null;
+    const text=await file.text(),imported=parseGpx(text);gpxSource={name:file.name||'parcours.gpx',text};stopGpxAnimation();gpxTrack=imported;const stats=trackStats(gpxTrack);gpxPlayer.progress=1;gpxPlayer.offset=null;
     $('#gpxStats').textContent=`${gpxTrack.length.toLocaleString('fr-CH')} points · ${stats.distance.toFixed(1)} km · ${stats.hasElevation?`+${Math.round(stats.gain).toLocaleString('fr-CH')} m`:'D+ non renseigné'} (GPX complet)`;$('#gpxStats').classList.add('loaded');
-    buildGpxRoutes();newStoryDraft();setPlaybackStatus('Tracé complet · Animer pour démarrer depuis la vue actuelle');
+    buildGpxRoutes();newStoryDraft();saveProject();setPlaybackStatus('Tracé complet · Animer pour démarrer depuis la vue actuelle');
     if(!gpxPlayer.routeBlock)showError('Le GPX est chargé, mais son tracé ne traverse aucune découpe actuellement affichée.');
   }catch(error){showError(error.message)}
 }
@@ -933,13 +939,29 @@ function saveActiveStats(){
   if(!editorPeakId)return;const config=settingsFor(editorPeakId);config.manualDistance=$('#distance').value;config.manualGain=$('#gain').value;config.manualDuration=$('#duration').value;config.manualDate=$('#date').value;config.manualNotes=$('#notes').value;saveProject();refreshStatsBillboards();const button=$('#saveButton');button.textContent='✓ Enregistré';setTimeout(()=>button.textContent='Enregistrer sur cet appareil',1500);
 }
 
+function projectSnapshot(){
+  return {cameraShots,narrativePins,customPeaks:peaks.filter(peak=>!PEAKS.some(item=>item.id===peak.id)),selected,globalSettings,blockSettings:Object.fromEntries(blockSettings),gpxTrack,gpxSource,
+    view:{position:camera.position.toArray(),target:controls.target.toArray()},
+    playback:{duration:gpxPlayer.duration,follow:gpxPlayer.follow,progress:gpxPlayer.progress,target:gpxPlayer.routeBlock?.peak.id},
+    exportOptions:Object.fromEntries(['exportResolution','exportOrientation','exportFps','exportMotion','exportDuration','exportCodec'].map(id=>[id,$('#'+id).value]))};
+}
+function projectThumbnail(){
+  try{renderer.render(scene,camera);const thumb=document.createElement('canvas');thumb.width=240;thumb.height=140;thumb.getContext('2d').drawImage(canvas,0,0,240,140);return thumb.toDataURL('image/jpeg',.7);}catch{return '';}
+}
 function saveProject(){
-  try{localStorage.setItem('mountainAnimatorProjectV3',JSON.stringify({cameraShots,narrativePins,customPeaks:peaks.filter(peak=>!PEAKS.some(item=>item.id===peak.id)),selected,globalSettings,blockSettings:Object.fromEntries(blockSettings)}))}catch{showError('Sauvegarde impossible : le stockage de ce navigateur est plein ou indisponible.');}
+  if(exportSettings)return;
+  const snapshot=projectSnapshot();
+  if(projectSession.current){projectSession.schedule(snapshot);return;}
+  // Legacy fallback retained only when the project manager is not running.
+  try{localStorage.setItem('mountainAnimatorProjectV3',JSON.stringify(snapshot));}catch{showError('Sauvegarde impossible : le stockage de ce navigateur est plein ou indisponible.');}
 }
 
 function restoreProject(){
   try{
-    const saved=JSON.parse(localStorage.getItem('mountainAnimatorProjectV3')||'null');if(!saved)return;
+    const saved=projectSession.current?.snapshot||JSON.parse(localStorage.getItem('mountainAnimatorProjectV3')||'null');if(!saved)return;
+    gpxTrack=Array.isArray(saved.gpxTrack)?saved.gpxTrack.map(p=>({...p,ele:Number.isFinite(p.ele)?p.ele:NaN,time:Number.isFinite(p.time)?p.time:NaN})):[];
+    gpxSource=saved.gpxSource||null;restoredView=saved.view||null;restoredPlayback=saved.playback||null;
+    if(restoredPlayback){gpxPlayer.duration=[12,25,45,90].includes(+restoredPlayback.duration)?+restoredPlayback.duration:25;gpxPlayer.follow=restoredPlayback.follow!==false;gpxPlayer.progress=clamp(Number(restoredPlayback.progress)||0);}
     narrativePins=sanitizeStoryPins(saved.narrativePins);
     if(Array.isArray(saved.cameraShots))cameraShots=saved.cameraShots.slice(0,30).filter(s=>['orbit','transfer','book'].includes(s.type));
     if(Array.isArray(saved.customPeaks))peaks=[...PEAKS,...saved.customPeaks];if(Array.isArray(saved.selected))selected=saved.selected.filter(id=>peaks.some(peak=>peak.id===id)).slice(0,MAX_PEAKS);Object.assign(globalSettings,saved.globalSettings||{});if(!QUALITY[globalSettings.quality])globalSettings.quality='high';
@@ -947,7 +969,7 @@ function restoreProject(){
     if(typeof globalSettings.showGpxStats!=='boolean')globalSettings.showGpxStats=true;
     globalSettings.gpxFollowDistance=clamp(Number(globalSettings.gpxFollowDistance)||1.6,.6,4);
     if(!Number.isFinite(globalSettings.cloudSeed))globalSettings.cloudSeed=1;
-    Object.entries(saved.blockSettings||{}).forEach(([id,value])=>{const config={...defaultBlockSettings(),...value};config.bookPages=cleanBookPages(config.bookPages);config.bookIndex=clamp(Math.floor(Number(config.bookIndex)||0),0,config.bookPages.length);config.bookHold=clamp(Number(config.bookHold)||7,4,20);if(!value.notebookLayout){config.statsX=0;config.statsY=0;config.statsZ=0;}config.gpxWidth=clamp(Number(config.gpxWidth)||4,1,16);config.rotation=clamp(Number(config.rotation)||0,-180,180);if(!/^#[0-9a-f]{6}$/i.test(config.gpxColor))config.gpxColor='#e76f32';blockSettings.set(id,config);});editorPeakId=selected[0]||'';
+    Object.entries(saved.blockSettings||{}).forEach(([id,value])=>{const config={...defaultBlockSettings(),...value};config.bookPages=cleanBookPages(config.bookPages);config.bookOpenAtStart=config.bookOpenAtStart===true;config.bookCloseAtEnd=config.bookCloseAtEnd===true;config.bookCoverTitle=String(config.bookCoverTitle||'').slice(0,80);config.bookCoverSubtitle=String(config.bookCoverSubtitle||'').slice(0,160);config.bookCoverColor=/^#[0-9a-f]{6}$/i.test(config.bookCoverColor)?config.bookCoverColor:'#334e43';config.bookCoverImage=validMediaId(config.bookCoverImage);config.bookIndex=clamp(Math.floor(Number(config.bookIndex)||0),0,config.bookPages.length);config.bookHold=clamp(Number(config.bookHold)||7,4,20);if(!value.notebookLayout){config.statsX=0;config.statsY=0;config.statsZ=0;}config.gpxWidth=clamp(Number(config.gpxWidth)||4,1,16);config.rotation=clamp(Number(config.rotation)||0,-180,180);if(!/^#[0-9a-f]{6}$/i.test(config.gpxColor))config.gpxColor='#e76f32';blockSettings.set(id,config);});editorPeakId=selected[0]||'';
   }catch{}
 }
 
@@ -1016,7 +1038,7 @@ function lockExportControls(locked){
 }
 
 function saveExportView(){
-  return {books:blocks.map(b=>({id:b.peak.id,showStats:b.config.showStats,index:b.group.userData.statsCard?.userData.index||0,turn:b.group.userData.statsCard?.userData.turn||0,manualTurn:b.group.userData.statsCard?.userData.manualTurn?{...b.group.userData.statsCard.userData.manualTurn}:null})),dpr:renderer.getPixelRatio(),position:camera.position.clone(),target:controls.target.clone(),
+  return {books:blocks.map(b=>({id:b.peak.id,showStats:b.config.showStats,openness:b.group.userData.statsCard?.userData.openness??1,manualCover:b.group.userData.statsCard?.userData.manualCover?{...b.group.userData.statsCard.userData.manualCover}:null,index:b.group.userData.statsCard?.userData.index||0,turn:b.group.userData.statsCard?.userData.turn||0,manualTurn:b.group.userData.statsCard?.userData.manualTurn?{...b.group.userData.statsCard.userData.manualTurn}:null})),dpr:renderer.getPixelRatio(),position:camera.position.clone(),target:controls.target.clone(),
     story:{visited:[...story.visited],active:story.active?{...story.active,fromPosition:story.active.fromPosition.clone(),fromTarget:story.active.fromTarget.clone(),offset:story.active.offset.clone(),exitOffset:story.active.exitOffset.clone(),target:story.active.target.clone()}:null},
     cinema:{...cinema},far:camera.far,maxDistance:controls.maxDistance,cloudTime,autoRotate:controls.autoRotate,enabled:controls.enabled,
     damping:controls.enableDamping,player:{...gpxPlayer,offset:gpxPlayer.offset?.clone(),
@@ -1087,7 +1109,7 @@ async function runVideoExport(){
 function restoreExportView(){
   const saved=exportSettings;if(!saved)return;
   let restoreBooks=false;for(const state of saved.books||[]){const block=blocks.find(b=>b.peak.id===state.id);if(block&&block.config.showStats!==state.showStats){block.config.showStats=state.showStats;restoreBooks=true;}}if(restoreBooks)refreshStatsBillboards();
-  for(const state of saved.books||[]){const book=blocks.find(b=>b.peak.id===state.id)?.group.userData.statsCard;if(book){book.userData.setState(state.index,state.turn);book.userData.manualTurn=state.manualTurn;}}
+  for(const state of saved.books||[]){const book=blocks.find(b=>b.peak.id===state.id)?.group.userData.statsCard;if(book){book.userData.setState(state.index,state.turn);book.userData.setOpenness(state.openness??1);book.userData.manualCover=state.manualCover;book.userData.manualTurn=state.manualTurn;}}
   Object.assign(story,saved.story);Object.assign(cinema,saved.cinema);Object.assign(gpxPlayer,saved.player);setGpxProgress(saved.player.progress);
   $('#cinemaStatus').textContent=saved.cinemaStatus;$('#cinemaPause').textContent=saved.cinemaPause;
   controls.autoRotate=false;controls.enableDamping=false;controls.update(0);
@@ -1161,7 +1183,7 @@ function updateLiveStats(){
 }
 
 function mountainCameraPose(id,spec={}){
-  if(spec.type==='book')return notebookCameraPose(id);
+  if(spec.type==='book')return notebookCameraPose(id,spec.bookOpenness??1);
   const block=blocks.find(b=>b.peak.id===id);if(!block)throw Error('Une montagne de la séquence n’est plus affichée.');
   const bounds=new THREE.Box3().setFromObject(block.group.userData.top),target=bounds.getCenter(new THREE.Vector3()),radius=bounds.getSize(new THREE.Vector3()).length()*.5;
   const vfov=THREE.MathUtils.degToRad(camera.fov),hfov=2*Math.atan(Math.tan(vfov/2)*camera.aspect);
@@ -1200,7 +1222,7 @@ function startCinema(shots=cameraShots){
   shots=shots.map(normalizeBookShot);
   if(shots.reduce((n,s)=>n+s.duration,0)>295)throw Error('La composition dépasse 295 secondes. Réduis les temps de lecture.');
   const timeline=compileCameraSequence(shots,{position:camera.position.clone(),target:controls.target.clone()},mountainCameraPose,globalCameraPose());
-  stopGpxAnimation();blocks.forEach(b=>{if(b.group.userData.statsCard)b.group.userData.statsCard.userData.manualTurn=null;});controls.autoRotate=false;$('#rotateButton').classList.remove('active');controls.enabled=false;
+  stopGpxAnimation();blocks.forEach(b=>{if(b.group.userData.statsCard){b.group.userData.statsCard.userData.manualTurn=null;b.group.userData.statsCard.userData.manualCover=null;}});controls.autoRotate=false;$('#rotateButton').classList.remove('active');controls.enabled=false;
   cinema.timeline=timeline;cinema.time=0;cinema.playing=true;cinema.paused=false;applyCinemaTime(0);$('#cinemaPause').textContent='Pause';
 }
 function applyCinemaTime(time){
@@ -1209,7 +1231,7 @@ function applyCinemaTime(time){
   const bookTracks=cinema.timeline.tracks.filter(s=>s.type==='book');
   for(const id of new Set(bookTracks.map(s=>s.blockId))){
     const track=bookTracks.filter(s=>s.blockId===id&&s.at<=cinema.time).at(-1),book=blocks.find(b=>b.peak.id===id)?.group.userData.statsCard;
-    if(book){book.userData.manualTurn=null;const state=track?sampleBookReading(book.userData.spreadCount,clamp(cinema.time-track.at,0,track.duration),track.duration):{index:0,turn:0};book.userData.setState(state.index,state.turn);}
+    if(book){book.userData.manualTurn=null;const state=track?sampleBookNarration(book.userData.spreadCount,clamp(cinema.time-track.at,0,track.duration),track.hold,track):{index:0,turn:0,openness:blocks.find(b=>b.peak.id===id).config.bookOpenAtStart?0:1};book.userData.setState(state.index,state.turn);book.userData.setOpenness(state.openness);}
   }
   const pose=sampleCameraSequence(cinema.timeline,cinema.time);
   camera.position.copy(pose.position);camera.position.y=safeCameraHeight(camera.position);controls.target.copy(pose.target);camera.lookAt(controls.target);
@@ -1352,7 +1374,7 @@ function updateStoryVisuals(){
   }));
 }
 
-function narrativeMediaIds(){return [...narrativePins.map(p=>p.image),...Array.from(blockSettings.values()).flatMap(c=>(c.bookPages||[]).map(p=>p.image))].filter(Boolean);}
+function narrativeMediaIds(){return [...narrativePins.map(p=>p.image),...Array.from(blockSettings.values()).flatMap(c=>[c.bookCoverImage,...(c.bookPages||[]).map(p=>p.image)])].filter(Boolean);}
 async function withMedia(action){
   mediaBusy++;$('#mediaStatus').textContent='Préparation de la photo…';
   try{await action();$('#mediaStatus').textContent='Photo prête et conservée sur cet appareil.';}
@@ -1385,9 +1407,11 @@ function renderNotebookEditor(){
   for(const id of ['bookAdd','bookFocus','bookPlay','bookAddShot'])$('#'+id).disabled=!available;
   if(!available){$('#bookPageFields').hidden=true;return;}
   const c=block.config,index=clamp(c.bookIndex||0,0,c.bookPages.length);c.bookIndex=index;
-  $('#bookPage').innerHTML=['Statistiques de l’ascension',...c.bookPages.map((p,i)=>`${i+1}. ${p.title||'Nouvelle double page'}`)].map((name,i)=>`<option value="${i}">${escapeHtml(name)}</option>`).join('');$('#bookPage').value=index;
+  $('#bookPage').innerHTML=['Statistiques de l’ascension',...c.bookPages.map((p,i)=>`${i+1}. ${(p.chapter?p.chapter+' · ':'')+(p.title||'Nouvelle double page')}`)].map((name,i)=>`<option value="${i}">${escapeHtml(name)}</option>`).join('');$('#bookPage').value=index;
+  $('#bookOpenAtStart').checked=c.bookOpenAtStart;$('#bookCloseAtEnd').checked=c.bookCloseAtEnd;$('#bookCoverTitle').value=c.bookCoverTitle;$('#bookCoverSubtitle').value=c.bookCoverSubtitle;$('#bookCoverColor').value=c.bookCoverColor;$('#bookRemoveCoverPhoto').disabled=!c.bookCoverImage;
+  const coverPreview=$('#bookCoverPreview');coverPreview.getContext('2d').drawImage(makeCoverCanvas(block),0,0,coverPreview.width,coverPreview.height);
   $('#bookHold').value=c.bookHold;$('#bookPageFields').hidden=index===0;
-  const p=c.bookPages[index-1]||{};$('#bookTitle').value=p.title||'';$('#bookText').value=p.text||'';$('#bookCaption').value=p.caption||'';$('#bookRemovePhoto').disabled=!p.image;
+  const p=c.bookPages[index-1]||{};$('#bookChapter').value=p.chapter||'';$('#bookTitle').value=p.title||'';$('#bookText').value=p.text||'';$('#bookCaption').value=p.caption||'';$('#bookRemovePhoto').disabled=!p.image;
   const preview=$('#bookPreview');preview.getContext('2d').drawImage(makeBookSpread(block,index),0,0,preview.width,preview.height);
   $('#bookPrevious').disabled=index===0;$('#bookNext').disabled=index===c.bookPages.length;
   $('#bookPageStatus').textContent=`Double page ${index+1} / ${c.bookPages.length+1}${index===0?' · contenu des statistiques du sommet':''}`;
@@ -1397,12 +1421,12 @@ function showNotebook(block){
   if(!block.group.userData.statsCard)refreshStatsBillboards();
   return block.group.userData.statsCard;
 }
-function notebookCameraPose(id){
+function notebookCameraPose(id,openness=1){
   const block=blocks.find(b=>b.peak.id===id);if(!block)throw Error('Ce carnet n’est plus dans la scène.');
   const book=showNotebook(block);book.updateWorldMatrix(true,true);
-  const target=book.localToWorld(new THREE.Vector3(0,.22,0));
+  const target=book.localToWorld(new THREE.Vector3(book.userData.width*.25*(1-openness),.22,0));
   const vfov=THREE.MathUtils.degToRad(camera.fov),hfov=2*Math.atan(Math.tan(vfov/2)*camera.aspect);
-  const distance=Math.max(book.userData.width/(2*Math.tan(hfov/2)),book.userData.height/(2*Math.tan(vfov/2)))*1.35;
+  const distance=Math.max(book.userData.width*(.5+.5*openness)/(2*Math.tan(hfov/2)),book.userData.height/(2*Math.tan(vfov/2)))*1.35;
   const direction=new THREE.Vector3(0,.94,.34).applyQuaternion(book.getWorldQuaternion(new THREE.Quaternion()));
   return {position:target.clone().addScaledVector(direction,distance),target};
 }
@@ -1410,11 +1434,12 @@ function normalizeBookShot(shot){
   if(shot.type!=='book')return shot;
   const block=blocks.find(b=>b.peak.id===shot.from);if(!block)throw Error('Choisis la montagne du carnet.');
   const hold=clamp(Number(shot.hold)||block.config.bookHold||7,4,20),count=block.config.bookPages.length+1;
-  return {...shot,hold,duration:2.4+count*hold+(count-1)*PAGE_TURN_SECONDS};
+  const openBook=block.config.bookOpenAtStart,closeBook=block.config.bookCloseAtEnd;return {...shot,hold,pageCount:count,openBook,closeBook,duration:bookNarrationDuration(count,hold,{openBook,closeBook})};
 }
 function advanceBookTurns(delta){
   blocks.forEach(block=>{
-    const book=block.group.userData.statsCard,a=book?.userData.manualTurn;if(!a)return;
+    const book=block.group.userData.statsCard;if(!book)return;const cover=book.userData.manualCover;if(cover){cover.elapsed=Math.min(cover.duration,cover.elapsed+delta);book.userData.setOpenness(cover.from+(cover.to-cover.from)*smootherstep(cover.elapsed/cover.duration));if(cover.elapsed>=cover.duration)book.userData.manualCover=null;}
+    const a=book.userData.manualTurn;if(!a)return;
     a.elapsed=Math.min(PAGE_TURN_SECONDS,a.elapsed+delta);const t=a.elapsed/PAGE_TURN_SECONDS;
     book.userData.setState(a.base,a.reverse?1-t:t);
     if(t>=1){book.userData.manualTurn=null;book.userData.setState(a.target);if(!exportSettings){block.config.bookIndex=a.target;saveProject();if(block===currentNotebookBlock())renderNotebookEditor();}}
@@ -1422,22 +1447,24 @@ function advanceBookTurns(delta){
 }
 function turnNotebook(direction){
   const block=currentNotebookBlock();if(!block)return;
-  const book=showNotebook(block);if(book.userData.manualTurn)return;
+  const book=showNotebook(block);if(book.userData.manualTurn||book.userData.manualCover)return;
+  if(book.userData.openness<.999){animateNotebookCover(1);return;}
   stopCinema();stopGpxAnimation();const index=book.userData.index,target=index+direction;
   if(target<0||target>=book.userData.spreadCount)return;
   book.userData.manualTurn={base:Math.min(index,target),target,reverse:direction<0,elapsed:0};
   $('#bookPrevious').disabled=$('#bookNext').disabled=true;
 }
 function bindNotebookControls(){
+  bindCoverControls();
   $('#bookMountain').addEventListener('change',renderNotebookEditor);
-  $('#bookPage').addEventListener('change',()=>{const b=currentNotebookBlock();if(!b)return;stopCinema();b.config.bookIndex=+$('#bookPage').value;const book=showNotebook(b);book.userData.manualTurn=null;book.userData.setState(b.config.bookIndex);renderNotebookEditor();saveProject();});
+  $('#bookPage').addEventListener('change',()=>{const b=currentNotebookBlock();if(!b)return;stopCinema();b.config.bookIndex=+$('#bookPage').value;const book=showNotebook(b);book.userData.manualTurn=null;book.userData.setState(b.config.bookIndex);book.userData.setOpenness(1);renderNotebookEditor();saveProject();});
   $('#bookFocus').addEventListener('click',()=>{const b=currentNotebookBlock();if(!b)return;stopCinema();stopGpxAnimation();beginCameraTransition(notebookCameraPose(b.peak.id),2.4,'notebook',()=>{gpxPlayer.phase='idle';releaseCamera();});setPanel(false);});
   $('#bookPrevious').addEventListener('click',()=>turnNotebook(-1));$('#bookNext').addEventListener('click',()=>turnNotebook(1));
   $('#bookAdd').addEventListener('click',()=>{const b=currentNotebookBlock();if(!b)return;if(b.config.bookPages.length>=12){showError('Maximum 12 doubles pages personnalisées par carnet.');return;}stopCinema();b.config.bookPages.push({title:'',text:'',caption:'',image:''});b.config.bookIndex=b.config.bookPages.length;showNotebook(b);refreshStatsBillboards();renderNotebookEditor();saveProject();});
-  const savePage=()=>{const b=currentNotebookBlock(),p=b?.config.bookPages[b.config.bookIndex-1];if(!p)return;stopCinema();Object.assign(p,{title:$('#bookTitle').value.trim(),text:$('#bookText').value.trim(),caption:$('#bookCaption').value.trim()});refreshStatsBillboards();renderNotebookEditor();saveProject();};
+  const savePage=()=>{const b=currentNotebookBlock(),p=b?.config.bookPages[b.config.bookIndex-1];if(!p)return;stopCinema();Object.assign(p,{chapter:$('#bookChapter').value.trim(),title:$('#bookTitle').value.trim(),text:$('#bookText').value.trim(),caption:$('#bookCaption').value.trim()});refreshStatsBillboards();renderNotebookEditor();saveProject();};
   $('#bookSave').addEventListener('click',savePage);
   // Save on leaving a field too, so choosing another page does not lose text.
-  for(const id of ['bookTitle','bookText','bookCaption'])$('#'+id).addEventListener('change',savePage);
+  for(const id of ['bookChapter','bookTitle','bookText','bookCaption'])$('#'+id).addEventListener('change',savePage);
   $('#bookDelete').addEventListener('click',()=>{const b=currentNotebookBlock();if(!b||!b.config.bookIndex)return;stopCinema();b.config.bookPages.splice(b.config.bookIndex-1,1);b.config.bookIndex=Math.min(b.config.bookIndex,b.config.bookPages.length);refreshStatsBillboards();renderNotebookEditor();saveProject();});
   $('#bookPhoto').addEventListener('change',async e=>{const file=e.target.files?.[0];e.target.value='';const b=currentNotebookBlock(),p=b?.config.bookPages[b.config.bookIndex-1];if(!file||!p)return;await withMedia(async()=>{const id=await importMedia(file);if(!b.config.bookPages.includes(p))return;stopCinema();p.image=id;refreshStatsBillboards();renderNotebookEditor();saveProject();});});
   $('#bookRemovePhoto').addEventListener('click',()=>{const b=currentNotebookBlock(),p=b?.config.bookPages[b.config.bookIndex-1];if(!p)return;p.image='';stopCinema();refreshStatsBillboards();renderNotebookEditor();saveProject();});
@@ -1446,4 +1473,22 @@ function bindNotebookControls(){
   $('#bookPlay').addEventListener('click',()=>{try{startCinema([reading()]);setPanel(false);}catch(e){showError(e.message);}});
   $('#bookAddShot').addEventListener('click',()=>{try{const shot=reading();if(cameraShots.reduce((n,s)=>n+normalizeBookShot(s).duration,0)+shot.duration>295)throw Error('La composition dépasse 295 secondes. Réduis les temps de lecture.');cameraShots.push(shot);renderShotList();saveProject();$('#bookPageStatus').textContent='Lecture ajoutée aux Outils caméra.';}catch(e){showError(e.message);}});
   syncNotebookEditor();
+}
+
+function restoreProjectControls(){
+  const saved=projectSession.current?.snapshot;
+  $('#gpxDuration').value=gpxPlayer.duration;
+  if(gpxTrack.length){const stats=trackStats(gpxTrack);$('#gpxStats').textContent=`${gpxSource?.name||'Parcours mémorisé'} · ${gpxTrack.length.toLocaleString('fr-CH')} points · ${stats.distance.toFixed(1)} km`;$('#gpxStats').classList.add('loaded');}
+  for(const [id,value] of Object.entries(saved?.exportOptions||{})){const input=$('#'+id);if(input?.tagName==='SELECT'&&[...input.options].some(o=>o.value===String(value)))input.value=value;}
+  for(const id of ['gpxDuration','gpxFollowToggle','gpxTarget','gpxProgress','exportResolution','exportOrientation','exportFps','exportMotion','exportDuration','exportCodec'])$('#'+id).addEventListener('change',saveProject);
+}
+
+function makeCoverCanvas(block){const canvas=document.createElement('canvas');canvas.width=768;canvas.height=1024;const c=block.config;return paintBookCover(canvas,{title:c.bookCoverTitle||block.peak.name,subtitle:c.bookCoverSubtitle,color:c.bookCoverColor},mediaImage(c.bookCoverImage));}
+function animateNotebookCover(to){const b=currentNotebookBlock();if(!b)return;stopCinema();stopGpxAnimation();const book=showNotebook(b);if(book.userData.manualTurn)return;book.userData.manualCover={from:book.userData.openness,to,elapsed:0,duration:to?BOOK_OPEN_SECONDS:BOOK_CLOSE_SECONDS};}
+function bindCoverControls(){
+  const save=()=>{const b=currentNotebookBlock();if(!b)return;stopCinema();Object.assign(b.config,{bookOpenAtStart:$('#bookOpenAtStart').checked,bookCloseAtEnd:$('#bookCloseAtEnd').checked,bookCoverTitle:$('#bookCoverTitle').value.trim(),bookCoverSubtitle:$('#bookCoverSubtitle').value.trim(),bookCoverColor:$('#bookCoverColor').value});refreshStatsBillboards();renderNotebookEditor();saveProject();};
+  for(const id of ['bookOpenAtStart','bookCloseAtEnd','bookCoverTitle','bookCoverSubtitle','bookCoverColor'])$('#'+id).addEventListener('change',save);
+  $('#bookOpenPreview').addEventListener('click',()=>animateNotebookCover(1));$('#bookClosePreview').addEventListener('click',()=>animateNotebookCover(0));
+  $('#bookCoverPhoto').addEventListener('change',async e=>{const file=e.target.files?.[0];e.target.value='';const b=currentNotebookBlock();if(!file||!b)return;await withMedia(async()=>{const id=await importMedia(file);stopCinema();b.config.bookCoverImage=id;refreshStatsBillboards();renderNotebookEditor();saveProject();});});
+  $('#bookRemoveCoverPhoto').addEventListener('click',()=>{const b=currentNotebookBlock();if(!b)return;b.config.bookCoverImage='';stopCinema();refreshStatsBillboards();renderNotebookEditor();saveProject();});
 }

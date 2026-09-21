@@ -282,3 +282,59 @@ pénétration dans la pile, aller/retour, édition/sauvegarde indépendante, cad
 portrait/paysage, liaison carnet→montagne et restauration après export annulé.
 `tests/narrative-smoke.html` vérifie dans un navigateur l’import, le redimensionnement,
 le rendu 2D des photos et leur restauration IndexedDB après rechargement.
+
+
+## V12 — Projets indépendants et carnets à couverture animée
+
+**Mes projets** permet de créer un récit vierge, de renommer le projet actuel,
+de dupliquer sa version, et d'ouvrir différents récits dans plusieurs onglets.
+Les réglages, GPX (points et fichier original), étapes, photos, couvertures,
+chapitres, compositions caméra, cadrage et réglages d'export sont sauvegardés
+ensemble. Le nom du projet et l'état de sauvegarde restent visibles au-dessus
+des sections. Les réglages V11 sont migrés dans « Mon premier récit » sans
+supprimer l'ancien stockage ni les photos. Les GPX importés avant V12 doivent
+être réimportés une dernière fois : les anciennes versions ne les conservaient pas.
+
+La sauvegarde automatique utilise IndexedDB. **Enregistrer** ajoute un aperçu.
+**Télécharger le projet complet** crée un fichier `.mountainproject` qui contient
+les images et le GPX : utilise **Importer un projet** sur un autre appareil pour
+le retrouver. L'import crée toujours un nouveau projet ; il ne remplace pas
+les projets existants. Les reliefs et photos satellite sont rechargés en ligne,
+pas inclus dans ce fichier. Deux onglets modifiant le même projet détectent
+les conflits ; **Dupliquer ma version** conserve alors les changements séparément.
+
+Les données restent locales au navigateur et à l'appareil. Elles ne sont pas
+synchronisées automatiquement et peuvent disparaître si les données du site
+sont effacées. Télécharge régulièrement une sauvegarde complète. Le bouton
+**Protéger le stockage local** demande la persistance au navigateur, qui peut la
+refuser. Cette protection ne remplace pas une sauvegarde.
+
+**Installer l'application** permet l'installation PWA lorsque le navigateur la
+propose ; sur iPhone, utiliser Partager → Sur l'écran d'accueil. L'application
+reste accessible à son adresse habituelle. Le gestionnaire de projets et son
+interface sont mis en cache ; le chargement de la 3D, des reliefs et de l'imagerie
+nécessite toujours Internet. Une mise à jour attend la fermeture des anciens
+onglets pour ne pas interrompre une exportation.
+
+Dans **Carnets de voyage**, deux cases indépendantes contrôlent la lecture :
+- **Commencer fermé, puis ouvrir** : approche de la caméra vers la couverture,
+  puis ouverture en 2,6 s et lecture des doubles pages ;
+- **Fermer à la fin de la lecture** : fermeture en 2,4 s après la dernière page.
+
+Les deux options restent désactivées par défaut pour conserver les anciens
+récits. La rubrique **Couverture** propose titre, sous-titre, couleur et image.
+Le carnet pivote autour de sa reliure pour ouvrir sa couverture et son bloc
+avant ; la déformation souple des feuilles est conservée à l'identique. Chaque
+double page peut porter un chapitre, un titre, du texte et une illustration.
+Les dessins s'importent comme images JPEG/PNG/WebP ; il n'y a pas d'outil de
+dessin à main levée intégré. Les boutons d'ouverture et de fermeture permettent
+de prévisualiser le mouvement. Les plans de lecture et les exports image par
+image incluent les options et adaptent leur durée automatiquement.
+
+Validation V12 : 72 tests automatisés, dont migration, sauvegardes concurrentes,
+export/import autonome avec remappage des images, restauration GPX, quatre
+combinaisons d'ouverture/fermeture, orientation de la couverture, conservation
+du tournage souple et restauration après rendu. `tests/projects-smoke.html`
+contrôle les vraies images et IndexedDB dans le navigateur, après rechargement.
+La vérification automatisée des géométries utilise Three.js ; le navigateur de
+contrôle distant ne dispose pas de WebGL pour valider visuellement toute la scène.

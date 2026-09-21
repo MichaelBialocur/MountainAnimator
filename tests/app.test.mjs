@@ -205,7 +205,7 @@ test('shadow camera fits all terrain after individual rotation, with subdued fil
 
 test('travel notebooks sit on the floor in front of each block and stay there when it rotates',()=>{
  const app=appHarness(),block=app.syntheticBlock();app.refreshStatsBillboards();
- const book=block.group.userData.statsCard,before=book.getWorldPosition(new THREE.Vector3());assert.equal(book.name,'travel-notebook');assert.ok(book.children.every(c=>c.isMesh||c.isLineSegments));near(before.y,-.44);assert.ok(before.z>block.data.size/2);
+ const book=block.group.userData.statsCard,before=book.getWorldPosition(new THREE.Vector3());assert.equal(book.name,'travel-notebook');assert.ok(book.children.every(c=>c.isMesh||c.isLineSegments||c.isGroup));near(before.y,-.44);assert.ok(before.z>block.data.size/2);
  input(app,'blockRotation','95');const after=book.getWorldPosition(new THREE.Vector3());assert.ok(before.distanceTo(after)<1e-6);assert.equal(block.group.userData.statsLeader,null);app.dom.window.close();
 });
 test('fat GPX thickness and live metrics follow fractional progress without extra connecting segments',()=>{

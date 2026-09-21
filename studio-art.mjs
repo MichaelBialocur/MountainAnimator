@@ -101,14 +101,14 @@ function fitText(ctx,text,x,y,width,size,font) {
   ctx.fillText(text,x,y,width);
 }
 
-function wrappedText(ctx,text,x,y,width,maxLines=3) {
+function wrappedText(ctx,text,x,y,width,maxLines=3,lineHeight=36) {
   let line='',lines=[];
   for (const word of text.split(/\s+/)) {
     const next=line?`${line} ${word}`:word;
     if(ctx.measureText(next).width>width&&line){lines.push(line);line=word;}else line=next;
   }
   if(line)lines.push(line);
-  lines.slice(0,maxLines).forEach((value,index)=>ctx.fillText(value+(index===maxLines-1&&lines.length>maxLines?'…':''),x,y+index*36,width));
+  lines.slice(0,maxLines).forEach((value,index)=>ctx.fillText(value+(index===maxLines-1&&lines.length>maxLines?'…':''),x,y+index*lineHeight,width));
 }
 
 export function paintStatsCard(canvas,stats) {
@@ -170,7 +170,8 @@ export function paintBookSpread(canvas,page,image,index){
   const rng=seededRandom(914+index);for(let i=0;i<5000;i++){ctx.fillStyle=`rgba(116,83,39,${rng()*.075})`;ctx.fillRect(rng()*w,rng()*h,1+rng()*3,1);}
   const shade=ctx.createLinearGradient(w*.45,0,w*.55,0);shade.addColorStop(0,'#76522a00');shade.addColorStop(.5,'#76522a55');shade.addColorStop(1,'#76522a00');ctx.fillStyle=shade;ctx.fillRect(w*.45,0,w*.1,h);
   ctx.strokeStyle='#b7a984';ctx.lineWidth=1;for(let y=239;y<h-120;y+=36){ctx.beginPath();ctx.moveTo(w*.065,y);ctx.lineTo(w*.45,y);ctx.stroke();}
-  ctx.fillStyle='#42503e';ctx.font='italic 47px Georgia, serif';wrappedText(ctx,page.title||'Au fil des sommets',w*.065,95,w*.37,2);
+  ctx.fillStyle='#7c6d4f';ctx.font='600 22px sans-serif';ctx.fillText((page.chapter||'CARNET DE VOYAGE').toUpperCase(),w*.065,54,w*.37);
+  ctx.fillStyle='#42503e';ctx.font='italic 47px Georgia, serif';wrappedText(ctx,page.title||'Au fil des sommets',w*.065,119,w*.37,2);
   ctx.fillStyle='#4d493c';ctx.font='30px Georgia, serif';
   let textY=234;for(const paragraph of (page.text||'').split(/\n/)){let line='';for(const word of paragraph.split(/\s+/)){const next=line?line+' '+word:word;if(ctx.measureText(next).width>w*.37&&line){if(textY<h-85)ctx.fillText(line,w*.065,textY,w*.37);textY+=36;line=word;}else line=next;}if(line&&textY<h-85)ctx.fillText(line,w*.065,textY,w*.37);textY+=36;}
   if(textY>=h-85){ctx.fillStyle='#eee4ca';ctx.fillRect(w*.40,h-112,w*.05,40);ctx.fillStyle='#4d493c';ctx.fillText('…',w*.415,h-86);}
@@ -187,4 +188,18 @@ export function paintStoryPhoto(canvas,pin,image){
   ctx.shadowColor='#0008';ctx.shadowBlur=16;ctx.fillStyle='#f5f0e3';ctx.fillRect(24,18,852,590);ctx.shadowBlur=0;
   if(image)containPhoto(ctx,image,40,34,820,554);else{ctx.fillStyle='#716d62';ctx.font='34px sans-serif';ctx.fillText('Photo indisponible · réimporte-la',95,310);}
   ctx.restore();const text=canvas.ownerDocument.createElement('canvas');text.width=900;text.height=440;paintStoryLabel(text,pin);ctx.drawImage(text,0,canvas.height*600/1040,canvas.width,canvas.height*440/1040);return canvas;
+}
+
+export function paintBookCover(canvas,cover,image){
+  const ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height;
+  ctx.fillStyle=cover.color||'#334e43';ctx.fillRect(0,0,w,h);
+  const rng=seededRandom(778);for(let i=0;i<20000;i++){ctx.fillStyle=i%2?'rgba(0,0,0,.08)':'rgba(255,246,220,.08)';ctx.fillRect(rng()*w,rng()*h,1+rng()*3,1+rng()*2);}
+  const shadow=ctx.createLinearGradient(0,0,w,0);shadow.addColorStop(0,'#0008');shadow.addColorStop(.10,'#0000');shadow.addColorStop(.9,'#0000');shadow.addColorStop(1,'#0004');ctx.fillStyle=shadow;ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle='#c6ad76';ctx.lineWidth=2;ctx.strokeRect(w*.07,h*.05,w*.86,h*.90);ctx.setLineDash([5,7]);ctx.strokeStyle='#c6ad7677';ctx.strokeRect(w*.045,h*.033,w*.91,h*.934);ctx.setLineDash([]);
+  ctx.fillStyle='#dec996';ctx.font='600 22px sans-serif';ctx.textAlign='center';ctx.fillText('CARNET D’ASCENSION',w/2,h*.13,w*.75);
+  ctx.font='italic 52px Georgia, serif';ctx.textAlign='left';wrappedText(ctx,cover.title||'Au fil des sommets',w*.14,h*.23,w*.72,3,60);
+  if(image){ctx.fillStyle='#e4d5b7';ctx.fillRect(w*.16,h*.41,w*.68,h*.34);containPhoto(ctx,image,w*.17,h*.42,w*.66,h*.32);}
+  else{ctx.strokeStyle='#d1b985';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(w*.20,h*.67);ctx.lineTo(w*.37,h*.48);ctx.lineTo(w*.48,h*.59);ctx.lineTo(w*.62,h*.43);ctx.lineTo(w*.80,h*.67);ctx.stroke();ctx.beginPath();ctx.moveTo(w*.33,h*.525);ctx.lineTo(w*.37,h*.54);ctx.lineTo(w*.40,h*.516);ctx.stroke();}
+  ctx.fillStyle='#d5c298';ctx.font='italic 28px Georgia, serif';wrappedText(ctx,cover.subtitle||'Récits, chemins et souvenirs',w*.14,h*.83,w*.72,3);
+  return canvas;
 }

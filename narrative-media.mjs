@@ -1,20 +1,7 @@
+import {storeRequest} from './workspace-db.mjs?v=12';
 // Photos remain on this device. Store blobs outside the small localStorage quota.
 const loaded=new Map(),pending=new Map();
-let database;
-function openDatabase(){
-  return database??=new Promise((resolve,reject)=>{
-    if(typeof indexedDB==='undefined'){reject(Error('Le stockage des photos est indisponible dans ce navigateur.'));return;}
-    const request=indexedDB.open('MountainAnimatorMedia',1);
-    request.onupgradeneeded=()=>request.result.createObjectStore('photos');
-    request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);
-  });
-}
-async function transaction(mode,action){
-  const db=await openDatabase();return new Promise((resolve,reject)=>{
-    const tx=db.transaction('photos',mode),request=action(tx.objectStore('photos'));
-    tx.oncomplete=()=>resolve(request.result);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||Error('Sauvegarde photo interrompue.'));
-  });
-}
+const transaction=(mode,action)=>storeRequest('photos',mode,action);
 async function decode(blob){
   const url=URL.createObjectURL(blob),image=new Image();
   try{await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=()=>reject(Error('Image illisible. Utilise un fichier JPEG, PNG ou WebP.'));image.src=url;});return image;}

@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#08111b">
   <meta name="description" content="Comparez vos sommets sous forme de découpes 3D photoréalistes, à la même échelle.">
   <title>Mountain Animator — Sommets côte à côte</title>
@@ -10,7 +11,7 @@
   <link rel="preconnect" href="https://services.arcgisonline.com" crossorigin>
   <link rel="preconnect" href="https://elevation-tiles-prod.s3.amazonaws.com" crossorigin>
   <link rel="stylesheet" href="styles.css?v=9">
-  <link rel="stylesheet" href="controls.css?v=11">
+  <link rel="stylesheet" href="controls.css?v=12">
   <script type="importmap">
     {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
@@ -28,6 +29,21 @@
         <button id="expandSections" type="button" class="secondary">Tout déplier</button>
         <button id="collapseSections" type="button" class="secondary">Tout replier</button>
       </div>
+      <div class="active-project"><span>PROJET ACTUEL</span><strong id="activeProjectName">Chargement…</strong><small id="projectStatus" role="status">Ouverture de la bibliothèque…</small></div>
+      <details class="control-section panel-section" data-panel-section id="projectsSection">
+        <summary class="section-title"><h2>Mes projets</h2><span>SAUVEGARDES</span></summary>
+        <div class="section-body" id="projectActions">
+          <label>Nom du projet<input id="projectName" maxlength="100" placeholder="Ex. Traversée du Lagginhorn"></label>
+          <div class="book-buttons"><button id="projectNew" class="secondary">Nouveau</button><button id="projectDuplicate" class="secondary">Dupliquer ma version</button></div>
+          <div class="book-buttons"><button id="projectRename" class="secondary">Renommer</button><button id="projectSave" class="secondary">Enregistrer</button></div>
+          <button id="projectExport" class="primary wide">Télécharger le projet complet</button>
+          <label class="photo-picker">Importer un projet<input id="projectImport" type="file" accept=".mountainproject,application/json"></label>
+          <ul id="projectList" class="project-list"></ul><button id="projectRefresh" class="secondary wide">Actualiser la liste</button>
+          <button id="projectPersist" class="secondary wide">Protéger le stockage local</button>
+          <button id="installApp" class="secondary wide">Installer sur cet appareil</button><p id="installStatus" class="control-hint" role="status"></p>
+          <p class="control-hint">GPX, photos, carnets et animations sont sauvegardés par projet sur cet appareil. Le fichier .mountainproject permet leur transfert et leur sauvegarde. Pas de synchronisation automatique entre appareils. Internet reste nécessaire pour charger les reliefs et les vues satellite.</p>
+        </div>
+      </details>
       <details class="control-section panel-section" data-panel-section id="peaksSection">
         <summary class="section-title"><h2>Découpes affichées</h2><span id="selectedCount">2 / 3</span></summary>
         <div class="section-body">
@@ -76,16 +92,28 @@
         <summary class="section-title"><h2>Carnets de voyage</h2><span>RÉCIT & PHOTOS</span></summary>
         <div class="section-body">
           <label class="select-label"><span>Carnet de la montagne</span><select id="bookMountain"></select></label>
+          <label class="toggle-row"><span><b>Commencer fermé et ouvrir le carnet</b><small>Ouverture au début de sa lecture</small></span><input id="bookOpenAtStart" type="checkbox"></label>
+          <label class="toggle-row"><span><b>Fermer après la dernière page</b><small>Fermeture en fin de lecture</small></span><input id="bookCloseAtEnd" type="checkbox"></label>
+          <details class="story-editor"><summary>Personnaliser la couverture</summary>
+            <canvas id="bookCoverPreview" width="384" height="512" aria-label="Aperçu de la couverture"></canvas>
+            <label>Titre de couverture<input id="bookCoverTitle" maxlength="80" placeholder="Nom du sommet par défaut"></label>
+            <label>Sous-titre<textarea id="bookCoverSubtitle" maxlength="160" rows="2"></textarea></label>
+            <label class="color-label"><span>Couleur du cuir</span><input id="bookCoverColor" type="color" value="#334e43"></label>
+            <label class="photo-picker">Dessin ou photo de couverture<input id="bookCoverPhoto" type="file" accept="image/jpeg,image/png,image/webp"></label>
+            <button id="bookRemoveCoverPhoto" class="secondary wide">Retirer l’image de couverture</button>
+          </details>
+          <div class="book-buttons"><button id="bookOpenPreview" class="secondary">Ouvrir le carnet</button><button id="bookClosePreview" class="secondary">Fermer le carnet</button></div>
           <button id="bookFocus" class="secondary wide">Approcher la caméra du carnet</button>
           <label class="select-label"><span>Double page à modifier</span><select id="bookPage"></select></label>
           <canvas id="bookPreview" width="768" height="512" aria-label="Aperçu de la double page"></canvas>
           <div class="book-buttons"><button id="bookPrevious" class="secondary">← Page précédente</button><button id="bookNext" class="secondary">Page suivante →</button></div>
           <p id="bookPageStatus" class="control-hint" role="status"></p>
           <div id="bookPageFields" hidden>
+            <label>Chapitre<input id="bookChapter" maxlength="80" placeholder="Ex. 1 — L’approche"></label>
             <label>Titre<input id="bookTitle" maxlength="80" placeholder="Ex. La dernière arête"></label>
             <label>Récit<textarea id="bookText" rows="6" maxlength="1000" placeholder="Raconte ce passage de l’ascension…"></textarea></label>
             <p class="control-hint">L’aperçu montre la mise en page finale. Si le texte déborde, répartis-le sur une autre double page.</p>
-            <label class="photo-picker">Photo de la page<input id="bookPhoto" type="file" accept="image/jpeg,image/png,image/webp"></label>
+            <label class="photo-picker">Dessin ou photo de la page<input id="bookPhoto" type="file" accept="image/jpeg,image/png,image/webp"></label>
             <button id="bookRemovePhoto" class="secondary wide">Retirer la photo</button>
             <label>Légende<textarea id="bookCaption" rows="2" maxlength="160"></textarea></label>
             <button id="bookSave" class="primary wide">Enregistrer la double page</button>
@@ -96,7 +124,7 @@
           <button id="bookPlay" class="primary wide">Lire le carnet avec la caméra</button>
           <button id="bookAddShot" class="secondary wide">＋ Ajouter cette lecture à la composition</button>
           <p id="mediaStatus" class="control-hint" role="status"></p>
-          <p class="control-hint">La première double page reprend les statistiques. Les suivantes accueillent tes récits et photos. Les photos restent sur cet appareil, dans ce navigateur. L’export vidéo inclut les pages et les photos ; ajoute ta voix au film dans ton logiciel de montage.</p>
+          <p class="control-hint">La première double page reprend les statistiques. Les suivantes accueillent tes récits et photos. Les images font partie du projet. Importe tes dessins en PNG, JPEG ou WebP. L’export vidéo inclut les pages et les photos ; ajoute ta voix au film dans ton logiciel de montage.</p>
         </div>
       </details>
       <details class="control-section panel-section" data-panel-section id="cloudsSection">
@@ -218,7 +246,7 @@
     addEventListener('error',event=>{if(/WebGL|context/i.test(event.message||'')){const loading=document.getElementById('loadingPanel'),panel=document.getElementById('errorPanel');if(loading)loading.hidden=true;if(panel){panel.hidden=false;panel.textContent='La 3D WebGL est désactivée dans ce navigateur. Active l’accélération graphique ou ouvre cette page dans Chrome, Firefox ou Safari récent.'}}});
   </script>
   <script type="module" src="peak-dialog.mjs?v=9"></script>
-  <script type="module" src="panel-sections.mjs?v=10"></script>
-  <script type="module" src="app.js?v=11.1"></script>
+  <script type="module" src="panel-sections.mjs?v=12"></script>
+  <script type="module" src="bootstrap.mjs?v=12"></script>
 </body>
 </html>
