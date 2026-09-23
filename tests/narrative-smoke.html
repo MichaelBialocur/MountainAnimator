@@ -4,7 +4,7 @@
 <button id="write">Test photo import and persistence</button><button id="read">Read saved photo</button>
 <p id="result" role="status">Ready</p><canvas id="spread" width="1536" height="1024"></canvas><canvas id="pin" width="900" height="1040"></canvas>
 <script type="module">
-import {importMedia,prepareMedia,mediaImage} from '../narrative-media.mjs?v=11';
+import {importMedia,prepareMedia,mediaImage} from '../narrative-media.mjs?v=13';
 import {paintBookSpread,paintStoryPhoto} from '../studio-art.mjs?v=11';
 const result=document.querySelector('#result');
 async function show(id){await prepareMedia([id]);const image=mediaImage(id);if(!image||image.naturalWidth!==1600||image.naturalHeight!==1000)throw Error('Resizing or restoration failed');

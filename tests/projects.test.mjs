@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import test from 'node:test';import assert from 'node:assert/strict';
 import {ProjectSession,createProject,duplicateProject,getProject,listProjects,updateProject,exportProjectFile,importProjectFile,projectMediaIds,validateSnapshot} from '../project-store.mjs';
-import {storeRequest} from '../workspace-db.mjs?v=12';
+import {storeRequest} from '../workspace-db.mjs?v=13';
 import {appHarness} from './harness.mjs';
 const photo=new Blob([Uint8Array.from([255,216,255,224,0,2,255,217])],{type:'image/jpeg'});
 const scene=()=>({selected:['chavalard'],customPeaks:[],globalSettings:{brightness:1.3},gpxSource:{name:'summits.gpx',text:'<gpx/>'},gpxTrack:[{lat:46.1,lon:7.1,ele:null,time:null,segment:0},{lat:46.11,lon:7.11,ele:2900,time:100,segment:0}],narrativePins:[{id:'pin-a',track:'track-a',block:'chavalard',lat:46.1,lon:7.1,image:'photo-test-pin'}],blockSettings:{chavalard:{bookOpenAtStart:true,bookCloseAtEnd:true,bookCoverImage:'photo-test-cover',bookPages:[{chapter:'La montée',title:'Un matin',text:'Départ avant le jour',image:'photo-test-page'}]}},cameraShots:[{type:'book',from:'chavalard',duration:20}]});
@@ -45,4 +45,11 @@ test('serialized autosaves keep latest edit and acknowledge only committed data'
 
 test('app snapshot restores GPX missing altitude, view, playback and chapter settings without reimport',async()=>{
  const saved=scene();saved.playback={duration:45,follow:false,progress:.3};saved.view={position:[3,10,20],target:[0,2,0]};const a=appHarness(saved,{prepareMedia:async()=>{}});assert.equal(a.gpxTrack.length,2);assert.ok(Number.isNaN(a.gpxTrack[0].ele));assert.equal(a.gpxPlayer.duration,45);assert.equal(a.gpxPlayer.follow,false);assert.equal(a.gpxPlayer.progress,.3);assert.equal(a.settingsFor('chavalard').bookPages[0].chapter,'La montée');const snapshot=a.projectSnapshot();assert.equal(snapshot.gpxSource.name,'summits.gpx');assert.equal(snapshot.gpxTrack.length,2);await new Promise(resolve=>setImmediate(resolve));a.dom.window.close();
+});
+
+test('video backups retain original bytes and trim/mode settings, without breaking V12 files',async()=>{
+ const {readFile}=await import('node:fs/promises'),bytes=await readFile(new URL('./fixtures/three-colors.mp4',import.meta.url)),key='video-roundtrip-test';await storeRequest('photos','readwrite',s=>s.put(new Blob([bytes],{type:'video/mp4'}),key));
+ const row=await createProject('Un film au sommet',{narrativePins:[{id:'pin-film',track:'gpx',block:'chavalard',lat:46,lon:7,video:key,videoDuration:6,videoStart:1,videoEnd:4,videoMode:'out'}]});
+ const data=await exportProjectFile(row),restored=await importProjectFile(data),pin=restored.snapshot.narrativePins[0];assert.equal(pin.videoMode,'out');assert.equal(pin.videoStart,1);assert.notEqual(pin.video,key);const blob=await storeRequest('photos','readonly',s=>s.get(pin.video));assert.deepEqual(new Uint8Array(await blob.arrayBuffer()),new Uint8Array(bytes));
+ const legacy=await importProjectFile(new Blob([JSON.stringify({format:'MountainAnimatorProject',version:1,name:'Ancien',snapshot:{selected:['chavalard']},media:[]})]));assert.equal(legacy.snapshot.selected[0],'chavalard');
 });

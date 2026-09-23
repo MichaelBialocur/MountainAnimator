@@ -1,10 +1,10 @@
-import {openWorkspaceDatabase,storeRequest} from './workspace-db.mjs?v=12';
-export const PROJECT_FORMAT='MountainAnimatorProject',PROJECT_VERSION=1;
+import {openWorkspaceDatabase,storeRequest} from './workspace-db.mjs?v=13';
+export const PROJECT_FORMAT='MountainAnimatorProject',PROJECT_VERSION=2;
 const copy=value=>structuredClone(value);
 const id=()=>`project-${crypto.randomUUID()}`;
 const nameOf=value=>String(value||'Nouveau récit').trim().slice(0,100)||'Nouveau récit';
 export function projectMediaIds(snapshot){
-  return [...new Set([...(snapshot.narrativePins||[]).map(p=>p.image),...Object.values(snapshot.blockSettings||{}).flatMap(c=>[c.bookCoverImage,...(c.bookPages||[]).map(p=>p.image)])].filter(Boolean))];
+  return [...new Set([...(snapshot.narrativePins||[]).flatMap(p=>[p.image,p.video]),...Object.values(snapshot.blockSettings||{}).flatMap(c=>[c.bookCoverImage,...(c.bookPages||[]).map(p=>p.image)])].filter(Boolean))];
 }
 // Explicit schema/size checks before any imported data is written to the database.
 export function validateSnapshot(value){
@@ -22,7 +22,7 @@ export function validateSnapshot(value){
   const ranges={exaggeration:[1,2.5],brightness:[.55,2.2],sunAzimuth:[0,360],sunElevation:[5,85],sunIntensity:[0,6],fillLight:[.05,2],cloudDensity:[1,20],cloudDetail:[1,3],cloudOpacity:[.15,1],cloudSize:[.4,2],cloudHeight:[100,8000],cloudSpread:[0,2500],terrainSmoothing:[0,1],gpxFollowDistance:[.6,4]};
   for(const [k,[lo,hi]] of Object.entries(ranges))if(s.globalSettings?.[k]!==undefined){const n=Number(s.globalSettings[k]);if(!Number.isFinite(n))throw Error(`Réglage invalide : ${k}`);s.globalSettings[k]=Math.max(lo,Math.min(hi,n));}
   for(const c of Object.values(s.blockSettings||{}))for(const [k,lo,hi] of [['diameter',6,22],['centerEast',-11,11],['centerNorth',-11,11],['rotation',-180,180],['statsX',-20,20],['statsY',-20,20],['statsZ',-20,20],['snowAltitude',0,6000],['snowCoverage',.15,1]])if(c[k]!==undefined){const n=Number(c[k]);if(!Number.isFinite(n))throw Error(`Réglage invalide : ${k}`);c[k]=Math.max(lo,Math.min(hi,n));}
-  for(const media of projectMediaIds(s))if(!/^photo-[a-zA-Z0-9-]{1,80}$/.test(media))throw Error('Référence d’image invalide.');
+  for(const media of projectMediaIds(s))if(!/^(photo|video)-[a-zA-Z0-9-]{1,80}$/.test(media))throw Error('Référence d’image invalide.');
   return s;
 }
 export const listProjects=()=>storeRequest('projects','readonly',s=>s.getAll()).then(rows=>rows.sort((a,b)=>b.updatedAt-a.updatedAt));
@@ -43,25 +43,27 @@ export async function updateProject(key,revision,snapshot,meta={}){
 export async function duplicateProject(row,name){return createProject(name||row.name+' — copie',row.snapshot,{thumbnail:row.thumbnail});}
 const blobToBase64=async blob=>{const bytes=new Uint8Array(await blob.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=32768)binary+=String.fromCharCode(...bytes.subarray(i,i+32768));return btoa(binary);};
 export async function exportProjectFile(row){
-  const snapshot=validateSnapshot(row.snapshot),media=[];
-  for(const key of projectMediaIds(snapshot)){const blob=await storeRequest('photos','readonly',s=>s.get(key));if(!blob)throw Error('Une photo du projet manque. Réimporte-la avant la sauvegarde complète.');media.push({id:key,type:blob.type,data:await blobToBase64(blob)});}
+  const snapshot=validateSnapshot(row.snapshot),media=[];let totalBytes=0;
+  for(const key of projectMediaIds(snapshot)){const blob=await storeRequest('photos','readonly',s=>s.get(key));if(!blob)throw Error('Un média du projet manque. Réimporte-le avant la sauvegarde complète.');totalBytes+=Math.ceil(blob.size*4/3);if(totalBytes>480*1024*1024)throw Error('La sauvegarde dépasse 500 Mo. Réduis la taille des vidéos du projet.');media.push({id:key,type:blob.type,data:await blobToBase64(blob)});}
   return new Blob([JSON.stringify({format:PROJECT_FORMAT,version:PROJECT_VERSION,name:row.name,snapshot,media})],{type:'application/json'});
 }
 export async function importProjectFile(file){
-  if(!file||file.size>200*1024*1024)throw Error('Fichier trop volumineux (maximum 200 Mo).');
+  if(!file||file.size>500*1024*1024)throw Error('Fichier trop volumineux (maximum 500 Mo).');
   let data;try{data=JSON.parse(await file.text());}catch{throw Error('Ce fichier de projet est illisible.');}
-  if(data?.format!==PROJECT_FORMAT||data.version!==PROJECT_VERSION)throw Error('Format de projet inconnu ou version non prise en charge.');
+  if(data?.format!==PROJECT_FORMAT||![1,PROJECT_VERSION].includes(data.version))throw Error('Format de projet inconnu ou version non prise en charge.');
   const snapshot=validateSnapshot(data.snapshot),ids=projectMediaIds(snapshot);
   if(!Array.isArray(data.media)||data.media.length>600)throw Error('La liste des images est invalide.');
   const remap=new Map(),blobs=[];
-  for(const m of data.media){if(!m||!ids.includes(m.id)||remap.has(m.id)||!['image/jpeg','image/png','image/webp'].includes(m.type)||typeof m.data!=='string'||m.data.length>35*1024*1024||!/^[A-Za-z0-9+/]*={0,2}$/.test(m.data))throw Error('Une image du fichier est invalide.');
+  for(const m of data.media){if(!m||!ids.includes(m.id)||remap.has(m.id)||!['image/jpeg','image/png','image/webp','video/mp4','video/webm'].includes(m.type)||typeof m.data!=='string'||m.data.length>(m.type.startsWith('video/')?140:35)*1024*1024||!/^[A-Za-z0-9+/]*={0,2}$/.test(m.data))throw Error('Une image du fichier est invalide.');
     let bytes;try{bytes=Uint8Array.from(atob(m.data),c=>c.charCodeAt(0));}catch{throw Error('Image encodée incorrectement.');}
     const jpeg=bytes[0]===255&&bytes[1]===216,png=bytes[0]===137&&bytes[1]===80&&bytes[2]===78&&bytes[3]===71,webp=String.fromCharCode(...bytes.subarray(0,4))==='RIFF'&&String.fromCharCode(...bytes.subarray(8,12))==='WEBP';
-    if(!(m.type==='image/jpeg'&&jpeg||m.type==='image/png'&&png||m.type==='image/webp'&&webp))throw Error('Le contenu d’une image ne correspond pas à son format.');
-    const key=`photo-${crypto.randomUUID()}`;remap.set(m.id,key);blobs.push([key,new Blob([bytes],{type:m.type})]);
+    const mp4=String.fromCharCode(...bytes.subarray(4,8))==='ftyp',webm=bytes[0]===26&&bytes[1]===69&&bytes[2]===223&&bytes[3]===163;
+    if(m.id.startsWith('video-')!==m.type.startsWith('video/'))throw Error('Type de média incohérent.');
+    if(!(m.type==='video/mp4'&&mp4||m.type==='video/webm'&&webm||m.type==='image/jpeg'&&jpeg||m.type==='image/png'&&png||m.type==='image/webp'&&webp))throw Error('Le contenu d’une image ne correspond pas à son format.');
+    const key=`${m.type.startsWith('video/')?'video':'photo'}-${crypto.randomUUID()}`;remap.set(m.id,key);blobs.push([key,new Blob([bytes],{type:m.type})]);
   }
-  if(ids.some(key=>!remap.has(key)))throw Error('Le fichier ne contient pas toutes les photos du projet.');
-  for(const pin of snapshot.narrativePins||[])if(pin.image)pin.image=remap.get(pin.image);
+  if(ids.some(key=>!remap.has(key)))throw Error('Le fichier ne contient pas tous les médias du projet.');
+  for(const pin of snapshot.narrativePins||[]){if(pin.image)pin.image=remap.get(pin.image);if(pin.video)pin.video=remap.get(pin.video);}
   for(const c of Object.values(snapshot.blockSettings||{})){if(c.bookCoverImage)c.bookCoverImage=remap.get(c.bookCoverImage);for(const p of c.bookPages||[])if(p.image)p.image=remap.get(p.image);}
   const row={id:id(),name:nameOf(data.name),snapshot,revision:1,createdAt:Date.now(),updatedAt:Date.now(),thumbnail:''};
   const db=await openWorkspaceDatabase();await new Promise((resolve,reject)=>{const tx=db.transaction(['projects','photos'],'readwrite');for(const [key,blob] of blobs)tx.objectStore('photos').add(blob,key);tx.objectStore('projects').add(row,row.id);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||Error('Import annulé.'));});return row;

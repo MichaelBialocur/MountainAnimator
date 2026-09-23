@@ -1,4 +1,4 @@
-import {sampleBookNarration} from './travel-book.mjs?v=12';
+import {sampleBookNarration} from './travel-book.mjs?v=13';
 import * as THREE from 'three';
 import {clamp,smootherstep} from './route-motion.mjs?v=7';
 const mix=(a,b,t)=>({position:a.position.clone().lerp(b.position,smootherstep(t)),target:a.target.clone().lerp(b.target,smootherstep(t))});

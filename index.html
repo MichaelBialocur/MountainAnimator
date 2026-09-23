@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://services.arcgisonline.com" crossorigin>
   <link rel="preconnect" href="https://elevation-tiles-prod.s3.amazonaws.com" crossorigin>
   <link rel="stylesheet" href="styles.css?v=9">
-  <link rel="stylesheet" href="controls.css?v=12">
+  <link rel="stylesheet" href="controls.css?v=13">
   <script type="importmap">
     {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
@@ -172,10 +172,21 @@
           <img id="storyPhotoPreview" class="photo-preview" alt="Photo de l’étape" hidden>
           <button id="storyRemovePhoto" type="button" class="secondary wide">Retirer la photo de l’étape</button>
           <p class="control-hint">La photo et le texte apparaissent pendant l’arrêt, puis disparaissent avant la reprise. Enregistre l’étape après avoir choisi la photo.</p>
+          <label class="photo-picker">Vidéo de cette étape (MP4 ou WebM)<input id="storyVideo" type="file" accept="video/mp4,video/webm"></label>
+          <video id="storyVideoPreview" class="photo-preview" controls muted playsinline hidden></video>
+          <p id="storyVideoStatus" class="control-hint" role="status"></p>
+          <div id="storyVideoOptions" hidden>
+            <label class="select-label"><span>Transition vidéo</span><select id="storyVideoMode"><option value="in-out">GPX → vidéo plein écran → GPX</option><option value="in">GPX → vidéo · terminer plein écran</option><option value="out">Commencer sur la vidéo → GPX</option><option value="card">Lire près du pin, sans zoom</option></select></label>
+            <div class="stats-grid"><label>Début de l’extrait (s)<input id="storyVideoStart" type="number" min="0" step="0.1" value="0"></label><label>Fin de l’extrait (s)<input id="storyVideoEnd" type="number" min="0.1" step="0.1" value="10"></label></div>
+            <label>Durée du zoom / dézoom (s)<input id="storyVideoTransition" type="number" min="0.5" max="6" step="0.5" value="2"></label>
+            <button id="storyRemoveVideo" type="button" class="secondary wide">Retirer la vidéo</button>
+            <p class="control-hint">100 Mo par fichier, extrait de 180 s maximum. L’image est recadrée au centre pour remplir tout le cadre, sans déformation ni bandes noires. Lecture et export muets : ajoute le son original dans ton logiciel de montage.</p>
+          </div>
           <label>Pause (secondes)<input id="storyPause" type="number" min="0" max="30" step="1" value="3"></label>
           <label class="select-label"><span>Orbite à cette étape</span><select id="storyAngle"><option value="0">Aucune · pause seule</option><option value="90">90°</option><option value="180" selected>180°</option><option value="360">Tour complet · 360°</option><option value="-180">180° · sens inverse</option><option value="-360">360° · sens inverse</option></select></label>
           <label>Durée de l’orbite (secondes)<input id="storyOrbitDuration" type="number" min="2" max="30" step="1" value="6"></label>
           <button id="storySave" type="button" class="primary wide">Ajouter cette étape</button>
+          <button id="storyPlayFrom" type="button" class="secondary wide" disabled>Lire depuis cette étape enregistrée</button>
           <button id="storyNew" type="button" class="secondary wide">Nouvelle étape</button>
           <ol id="storyList" class="shot-list"></ol>
           <p id="storyStatus" class="control-hint" role="status">Importe un GPX pour placer des étapes.</p>
@@ -214,7 +225,7 @@
           <label class="select-label"><span>Orientation</span><select id="exportOrientation"><option value="landscape">Paysage · 16:9</option><option value="portrait">Vertical · 9:16</option></select></label>
           <label class="select-label"><span>Fichier vidéo</span><select id="exportCodec"></select></label>
           <label class="select-label"><span>Cadence du fichier</span><select id="exportFps"><option value="30">30 images/s</option><option value="60">60 images/s</option></select></label>
-          <label class="select-label"><span>Animation à rendre</span><select id="exportMotion"><option value="sequence">Composition des outils caméra</option><option value="rotation" selected>Rotation complète · 360°</option><option value="gpx">GPX complet · approche et recul inclus</option><option value="current">Continuer l’animation actuelle</option><option value="still">Caméra fixe · nuages animés</option></select></label>
+          <label class="select-label"><span>Animation à rendre</span><select id="exportMotion"><option value="sequence">Composition des outils caméra</option><option value="rotation" selected>Rotation complète · 360°</option><option value="pin">Depuis l’étape sélectionnée · puis GPX</option><option value="gpx">GPX complet · approche et recul inclus</option><option value="current">Continuer l’animation actuelle</option><option value="still">Caméra fixe · nuages animés</option></select></label>
           <label class="select-label"><span>Durée (automatique pour GPX et composition)</span><select id="exportDuration"><option value="15">15 s</option><option value="35" selected>35 s</option><option value="60">60 s</option><option value="120">120 s</option></select></label>
         </fieldset>
         <p class="control-hint">Chaque image est calculée puis encodée à cadence fixe. Une scène lourde prend plus de temps à exporter, sans perdre d’images. Le GPX complet utilise sa durée de parcours et ajoute les transitions. Garde la page ouverte jusqu’à la fin.</p>
@@ -227,7 +238,7 @@
     </aside>
     <div id="panelScrim"></div>
     <section id="stage" aria-label="Scène tridimensionnelle">
-      <canvas id="sceneCanvas"></canvas>
+      <canvas id="storyVideoCanvas" aria-hidden="true" hidden></canvas><canvas id="sceneCanvas"></canvas>
       <div id="renderPanel" class="render-panel" hidden role="dialog" aria-modal="true" aria-label="Rendu vidéo">
         <strong>Calcul du film image par image</strong><p id="renderStatus" role="status">Préparation…</p>
         <progress id="renderProgress" max="1" value="0"></progress>
@@ -246,7 +257,7 @@
     addEventListener('error',event=>{if(/WebGL|context/i.test(event.message||'')){const loading=document.getElementById('loadingPanel'),panel=document.getElementById('errorPanel');if(loading)loading.hidden=true;if(panel){panel.hidden=false;panel.textContent='La 3D WebGL est désactivée dans ce navigateur. Active l’accélération graphique ou ouvre cette page dans Chrome, Firefox ou Safari récent.'}}});
   </script>
   <script type="module" src="peak-dialog.mjs?v=9"></script>
-  <script type="module" src="panel-sections.mjs?v=12"></script>
-  <script type="module" src="bootstrap.mjs?v=12"></script>
+  <script type="module" src="panel-sections.mjs?v=13"></script>
+  <script type="module" src="bootstrap.mjs?v=13"></script>
 </body>
 </html>

@@ -59,6 +59,7 @@ test('GPX photo is shown during its stop, fades out before departure, and remain
  field(a,'storyName','Sommet');field(a,'storyPosition','50');field(a,'storyPause','5');field(a,'storyAngle','0');a.saveStoryPin();
  const data=JSON.parse(a.window.localStorage.getItem('mountainAnimatorProjectV3'));data.narrativePins[0].image='photo-summit';
  const restored=appHarness(data,{mediaImage:()=>null,prepareMedia:async()=>{}});restored.syntheticBlock();restored.gpxTrack=a.gpxTrack;restored.buildGpxRoutes();
+ await new Promise(resolve=>setImmediate(resolve));
  const pin=restored.storyPinsFor()[0];assert.equal(pin.label.material.map.image.height,1040);assert.equal(pin.label.material.depthTest,false);
  restored.camera.position.set(0,14,26);restored.camera.lookAt(0,2,0);restored.setGpxProgress(.5);restored.toggleGpxAnimation();for(let i=0;i<60;i++)restored.advancePlayback(.05);
  restored.updateStoryVisuals();assert.equal(pin.label.visible,true);assert.ok(pin.label.material.opacity>0);

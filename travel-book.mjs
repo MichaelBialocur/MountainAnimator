@@ -38,13 +38,13 @@ export function sampleBookNarration(count,time,hold,options={}){
   if(time<lead+opening+reading){const state=sampleBookReading(count,time-opening,lead+reading);return {...state,openness:1};}
   return {index:Math.max(0,count-1),turn:0,openness:options.closeBook?1-smootherstep((time-(lead+opening+reading))/BOOK_CLOSE_SECONDS):1};
 }
-export function createTravelBook({width,height,paintSpread,spreadCount,anisotropy=4,document:doc,paintCover}){
+export function createTravelBook({width,height,paintSpread,spreadCount,anisotropy=4,document:doc,paintCover,coverColor='#334e43'}){
   const book=new THREE.Group();book.name='travel-notebook';
   const leftHalf=new THREE.Group();leftHalf.name='book-front-half';leftHalf.position.y=.27;book.add(leftHalf);
   const toLeft=object=>{book.remove(object);object.position.y-=.27;leftHalf.add(object);return object;};
   const paper=new THREE.MeshStandardMaterial({color:0xd8c9a8,roughness:1});
   const leatherCanvas=doc.createElement('canvas');leatherCanvas.width=256;leatherCanvas.height=256;
-  const c=leatherCanvas.getContext('2d');c.fillStyle='#533e2d';c.fillRect(0,0,256,256);
+  const c=leatherCanvas.getContext('2d');c.fillStyle=coverColor;c.fillRect(0,0,256,256);
   let seed=37;for(let i=0;i<6500;i++){seed=(Math.imul(seed,1664525)+1013904223)>>>0;const x=seed%256;seed=(Math.imul(seed,1664525)+1013904223)>>>0;c.fillStyle=i%2?'#634b35':'#423022';c.fillRect(x,seed%256,1,2);}
   const leatherMap=new THREE.CanvasTexture(leatherCanvas);leatherMap.colorSpace=THREE.SRGBColorSpace;leatherMap.wrapS=leatherMap.wrapT=THREE.RepeatWrapping;leatherMap.repeat.set(5,3);
   const leather=new THREE.MeshStandardMaterial({map:leatherMap,bumpMap:leatherMap,bumpScale:.015,roughness:.92});
@@ -53,14 +53,29 @@ export function createTravelBook({width,height,paintSpread,spreadCount,anisotrop
     const cw=width/2+.1,ch=height+.2,r=.09,shape=new THREE.Shape();
     shape.moveTo(-cw/2+r,-ch/2);shape.lineTo(cw/2-r,-ch/2);shape.quadraticCurveTo(cw/2,-ch/2,cw/2,-ch/2+r);shape.lineTo(cw/2,ch/2-r);shape.quadraticCurveTo(cw/2,ch/2,cw/2-r,ch/2);shape.lineTo(-cw/2+r,ch/2);shape.quadraticCurveTo(-cw/2,ch/2,-cw/2,ch/2-r);shape.lineTo(-cw/2,-ch/2+r);shape.quadraticCurveTo(-cw/2,-ch/2,-cw/2+r,-ch/2);
     const coverGeo=new THREE.ExtrudeGeometry(shape,{depth:.045,bevelEnabled:true,bevelSegments:3,steps:1,bevelSize:.018,bevelThickness:.018,curveSegments:5});coverGeo.rotateX(-Math.PI/2);
-    const cover=new THREE.Mesh(coverGeo,leather);cover.position.set(sign*width/4,.025,0);book.add(cover);if(sign<0)toLeft(cover);
+    const cover=new THREE.Mesh(coverGeo,leather);cover.position.set(sign*width/4,.025,0);cover.name=sign<0?'book-front-cover':'book-back-cover';book.add(cover);if(sign<0)toLeft(cover);
     const stack=addBox(width/2-.015,.11,height,sign*width/4,.14,0,paper);if(sign<0)toLeft(stack);
     const edgeMat=new THREE.LineBasicMaterial({color:0xaa9470,transparent:true,opacity:.48});
     const lines=[];
     for(let i=0;i<9;i++){const y=.093+i*.012,x0=sign<0?-width/2:0,x1=sign<0?0:width/2;lines.push(new THREE.Vector3(x0,y,height/2+.003),new THREE.Vector3(x1,y,height/2+.003),new THREE.Vector3(sign*width/2,y,-height/2),new THREE.Vector3(sign*width/2,y,height/2));}
     const edges=new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(lines),edgeMat);book.add(edges);if(sign<0)toLeft(edges);
   }
-  addBox(.13,.12,height+.14,0,.07,0,leather);
+  // A solid curved leather binding connects both covers throughout closure.
+  const spineSegments=32,spineGeo=new THREE.BufferGeometry(),spinePositions=new Float32Array((spineSegments+1)*4*3),spineUV=new Float32Array((spineSegments+1)*4*2),spineIndices=[];
+  for(let i=0;i<=spineSegments;i++)for(let j=0;j<4;j++){spineUV[(i*4+j)*2]=i/spineSegments;spineUV[(i*4+j)*2+1]=j%2;}
+  for(let i=0;i<spineSegments;i++)for(const [a,b] of [[0,1],[1,3],[3,2],[2,0]]){const k=i*4;spineIndices.push(k+a,k+b,k+4+b,k+a,k+4+b,k+4+a);}
+  spineIndices.push(0,2,3,0,3,1);const last=spineSegments*4;spineIndices.push(last,last+1,last+3,last,last+3,last+2);
+  spineGeo.setAttribute('position',new THREE.BufferAttribute(spinePositions,3));spineGeo.setAttribute('uv',new THREE.BufferAttribute(spineUV,2));spineGeo.setIndex(spineIndices);
+  const spine=new THREE.Mesh(spineGeo,leather);spine.name='book-rounded-spine';book.add(spine);
+  function updateSpine(angle){
+    const cos=Math.cos(angle),sin=Math.sin(angle),a={x:.055,y:.02},b={x:-.055*cos+.25*sin,y:.27-.055*sin-.25*cos};
+    const c={x:a.x-.20,y:a.y-.07},d={x:b.x+.20*cos+.07*sin,y:b.y+.20*sin-.07*cos};
+    for(let i=0;i<=spineSegments;i++){const t=i/spineSegments,u=1-t,x=u*u*u*a.x+3*u*u*t*c.x+3*u*t*t*d.x+t*t*t*b.x,y=u*u*u*a.y+3*u*u*t*c.y+3*u*t*t*d.y+t*t*t*b.y;
+      for(let j=0;j<4;j++){const k=(i*4+j)*3;spinePositions[k]=x+(j>=2?.018:0);spinePositions[k+1]=y+(j>=2?.018:0);spinePositions[k+2]=(j%2?1:-1)*(height/2+.09);}}
+    spineGeo.attributes.position.needsUpdate=true;spineGeo.computeVertexNormals();spineGeo.computeBoundingSphere();
+  }
+  const backCanvas=doc.createElement('canvas');backCanvas.width=512;backCanvas.height=768;const bc=backCanvas.getContext('2d');bc.drawImage(leatherCanvas,0,0,512,768);bc.strokeStyle='#b9a374';bc.lineWidth=3;bc.strokeRect(28,28,456,712);bc.strokeRect(35,35,442,698);bc.fillStyle='#d2bf8c';bc.textAlign='center';bc.font='italic 24px Georgia';bc.fillText('Carnet de voyage',256,660);bc.beginPath();bc.moveTo(185,410);bc.lineTo(250,300);bc.lineTo(325,410);bc.stroke();
+  const backMap=new THREE.CanvasTexture(backCanvas);backMap.colorSpace=THREE.SRGBColorSpace;const backCoverGeo=new THREE.PlaneGeometry(width/2+.065,height+.165);backCoverGeo.rotateX(Math.PI/2);backCoverGeo.translate(width/4,.003,0);const backCover=new THREE.Mesh(backCoverGeo,new THREE.MeshStandardMaterial({map:backMap,roughness:.85}));backCover.name='book-back-cover-art';book.add(backCover);
   const ribbon=addBox(.075,.009,height*.65,width*.16,.091,height*.4,new THREE.MeshStandardMaterial({color:0x8c4435,roughness:1}));ribbon.rotation.y=.05;
   const staticGeo=new THREE.PlaneGeometry(width/2,height,48,12);staticGeo.rotateX(-Math.PI/2);
   const makeStatic=sign=>{const geo=staticGeo.clone(),p=geo.attributes.position;for(let i=0;i<p.count;i++){const x=p.getX(i)+sign*width/4;p.setXYZ(i,x,.22+.035*Math.exp(-Math.abs(x)/(width/2)*8),p.getZ(i));}geo.computeVertexNormals();const mesh=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({roughness:.96,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1}));book.add(mesh);return mesh;};
@@ -99,7 +114,7 @@ export function createTravelBook({width,height,paintSpread,spreadCount,anisotrop
     // Keep only visible and immediately neighbouring spreads in GPU memory.
     for(const [key,pair] of cache)if(Math.abs(key-index)>1){pair.forEach(t=>t.dispose());cache.delete(key);}
   }
-  function setOpenness(value){const openness=clamp(value);leftHalf.rotation.z=-Math.PI*(1-openness);book.userData.openness=openness;front.visible=back.visible=openness>.999&&book.userData.turn>0;}
+  function setOpenness(value){const openness=clamp(value);leftHalf.rotation.z=-Math.PI*(1-openness);updateSpine(leftHalf.rotation.z);book.userData.openness=openness;front.visible=back.visible=openness>.999&&book.userData.turn>0;}
   book.userData={width,height,spreadCount,index:0,turn:0,openness:1,manualTurn:null,manualCover:null,surface:left,setState,setOpenness,dispose:()=>{for(const pair of cache.values())pair.forEach(t=>t.dispose());cache.clear();}};
-  setState(0);return book;
+  setState(0);setOpenness(1);return book;
 }

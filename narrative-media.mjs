@@ -1,4 +1,4 @@
-import {storeRequest} from './workspace-db.mjs?v=12';
+import {storeRequest} from './workspace-db.mjs?v=13';
 // Photos remain on this device. Store blobs outside the small localStorage quota.
 const loaded=new Map(),pending=new Map();
 const transaction=(mode,action)=>storeRequest('photos',mode,action);

@@ -338,3 +338,50 @@ du tournage souple et restauration après rendu. `tests/projects-smoke.html`
 contrôle les vraies images et IndexedDB dans le navigateur, après rechargement.
 La vérification automatisée des géométries utilise Three.js ; le navigateur de
 contrôle distant ne dispose pas de WebGL pour valider visuellement toute la scène.
+
+
+## V13 — Dos du carnet et vidéos aux étapes
+
+Le carnet possède maintenant une quatrième de couverture décorée et un dos
+arrondi en cuir. La géométrie de la reliure rejoint les deux couvertures pendant
+l'ouverture et la fermeture ; les feuilles souples conservent leur animation.
+
+Dans **Parcours GPX → Étapes et narration**, importe une vidéo MP4 (H.264 conseillé)
+ou WebM. Elle remplace la photo de l'étape. Choisis les secondes de début et de
+fin, puis la transition et sa durée (0,5 à 6 s). Enregistre l'étape.
+
+- **GPX → vidéo plein écran → GPX** : arrêt/orbite au pin, agrandissement,
+  lecture de l'extrait, dézoom et reprise du parcours.
+- **GPX → vidéo · terminer plein écran** : même entrée, fin sur la vidéo,
+  sans retour imposé. « Reprendre le GPX » permet de quitter cet état.
+- **Commencer sur la vidéo → GPX** : lecture plein écran puis dézoom vers le pin.
+  Sélectionne le pin avec **Modifier / voir**, puis **Lire depuis cette étape
+  enregistrée** pour commencer directement sur la vidéo.
+- **Lire près du pin, sans zoom** : la vidéo reste à côté de son emplacement.
+
+Le plein écran remplit le cadre de rendu à 100 %, sans déformation : si le
+format source diffère, un recadrage centré remplace les bandes noires. En mode
+film, ce cadre occupe l'écran. La première et la dernière image sont figées
+pendant le zoom et le dézoom, ce qui facilite le raccord avec le même extrait
+dans un logiciel de montage. Pause/reprise fige aussi l'instant vidéo.
+
+À l'export, **GPX complet** joue toutes les étapes ; **Depuis l'étape sélectionnée
+· puis GPX** permet une entrée depuis la vidéo. La fin plein écran interrompt
+la suite du trajet au pin choisi. L'encodeur attend le décodage de chaque image
+source à l'instant du film ; aucune capture en temps réel n'est utilisée.
+L'aperçu peut ralentir sur un appareil peu puissant, sans sauter d'images dans
+le fichier exporté. Lecture narrative et export sont **muets** : ajoute le son
+original ou ta narration dans Filmora ou ton logiciel de montage.
+
+Les fichiers vidéo originaux restent dans IndexedDB et font partie de l'export
+`.mountainproject`. Limites : 100 Mo par vidéo, 180 s par extrait, 500 Mo par
+fichier de projet et 5 minutes par rendu vidéo. Prépare des extraits courts pour
+les longues vidéos 4K. Le format de sauvegarde passe à la version 2 ; l'import
+accepte toujours les sauvegardes V12. Un codec absent du navigateur, un média
+manquant ou un décodage expiré produit une erreur explicite.
+
+Validation : 78 tests automatisés, dont géométrie du dos, quatre transitions,
+cadrages paysage/portrait, arrêt/reprise GPX, attente des images à l'export,
+restauration après annulation et export/import des octets vidéo. La page
+`tests/video-smoke.html` contrôle un vrai MP4 rouge/vert/bleu, sa restauration
+IndexedDB et un encodage MP4 image par image dans le navigateur.

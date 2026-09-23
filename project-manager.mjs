@@ -1,4 +1,4 @@
-import {projectSession,listProjects,createProject,duplicateProject,updateProject,exportProjectFile,importProjectFile} from './project-store.mjs?v=12';
+import {projectSession,listProjects,createProject,duplicateProject,updateProject,exportProjectFile,importProjectFile} from './project-store.mjs?v=13';
 const $=id=>document.getElementById(id);
 let busy=false;
 const status=(message,error=false)=>{ $('projectStatus').textContent=message;$('projectStatus').classList.toggle('save-error',error);};
@@ -27,7 +27,7 @@ export async function startProjectManager(){
   let legacy;try{legacy=JSON.parse(localStorage.getItem('mountainAnimatorProjectV3')||'null');}catch{}
   let key=requestedId();
   // A deleted/cleared last selection must not prevent reopening the library.
-  if(key&&!new URL(location.href).searchParams.has('project')){try{const {getProject}=await import('./project-store.mjs?v=12');if(!await getProject(key))key=null;}catch(e){throw e;}}
+  if(key&&!new URL(location.href).searchParams.has('project')){try{const {getProject}=await import('./project-store.mjs?v=13');if(!await getProject(key))key=null;}catch(e){throw e;}}
   const row=await projectSession.open(key,legacy);remember(row);$('projectName').value=row.name;status('Projet chargé · sauvegarde automatique');await renderList();
   $('projectNew').onclick=()=>perform(async()=>{await saveCurrent();await navigate(await createProject($('projectName').value||'Nouveau récit',{}));});
   $('projectDuplicate').onclick=()=>perform(async()=>{

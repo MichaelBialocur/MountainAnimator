@@ -1,6 +1,6 @@
 <!doctype html><html lang="fr"><meta charset="utf-8"><title>V12 — validation des projets</title><style>body{background:#152831;color:#eee7d5;font:17px system-ui;max-width:980px;margin:40px auto;padding:20px}button,a{padding:12px;color:inherit}canvas{max-width:32%;height:auto;margin:20px}li{padding:7px}</style><h1>V12 — projets et couverture</h1><p>Test de données synthétiques, sans toucher aux projets existants.</p><button id="run">Tester un projet avec une image et un GPX</button><button id="reload">Vérifier après rechargement</button><ul id="results"></ul><a id="open" hidden>Ouvrir le projet de test</a><div><canvas id="cover" width="768" height="1024"></canvas><canvas id="page" width="1536" height="1024"></canvas></div><script type="module">
-import {createProject,exportProjectFile,importProjectFile,getProject,projectMediaIds} from '../project-store.mjs?v=12';
-import {importMedia,loadMedia} from '../narrative-media.mjs?v=12';
+import {createProject,exportProjectFile,importProjectFile,getProject,projectMediaIds} from '../project-store.mjs?v=13';
+import {importMedia,loadMedia} from '../narrative-media.mjs?v=13';
 import {paintBookCover,paintBookSpread} from '../studio-art.mjs?v=12';
 const out=document.getElementById('results'),log=t=>{const li=document.createElement('li');li.textContent=t;out.append(li);};
 const fail=e=>log('ÉCHEC : '+e.message),check=(yes,message)=>{if(!yes)throw Error(message);log('✓ '+message);};
