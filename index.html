@@ -64,8 +64,27 @@
         <label class="range-label"><span>Hauteur du soleil <output id="sunElevationValue">38°</output></span><input id="sunElevation" type="range" min="5" max="85" value="38" step="1"></label>
         <label class="range-label"><span>Puissance du soleil <output id="sunIntensityValue">3,2</output></span><input id="sunIntensity" type="range" min="0" max="6" value="3.2" step="0.1"></label>
         <label class="toggle-row"><span><b>Ombres du relief</b><small>Éclairage cinématique</small></span><input id="shadowToggle" type="checkbox" checked></label>
-        <label class="select-label"><span>Texture du sol</span><select id="groundTexture"><option value="marble">Marbre blanc veiné</option><option value="dark-marble">Marbre noir</option><option value="slate">Ardoise alpine</option><option value="wood">Bois de refuge</option><option value="studio">Studio mat</option></select></label>
+
         <button id="resetCameraButton" class="secondary wide">Recentrer la composition</button>
+        </div>
+      </details>
+      <details class="control-section panel-section" data-panel-section id="groundSection">
+        <summary class="section-title"><h2>Sol &amp; décor</h2><span>NATURE</span></summary>
+        <div class="section-body">
+        <label class="select-label"><span>Texture du sol</span><select id="groundTexture"><option value="marble">Marbre blanc veiné</option><option value="dark-marble">Marbre noir</option><option value="slate">Ardoise alpine</option><option value="wood">Bois de refuge</option><option value="studio">Studio mat</option><option value="meadow">Prairie alpine</option><option value="earth">Terre de sous-bois</option><option value="gravel">Gravier naturel</option></select></label>
+        <label class="select-label"><span>Appliquer une ambiance</span><select id="decorPreset"><option value="">Choisir une ambiance…</option value="meadow">Prairie alpine · herbes et cailloux</option><option value="scree">Rocaille · galets et rochers</option><option value="forest">Lisière de forêt · conifères</option></select></label>
+        <p class="control-hint">Une ambiance règle le sol et le décor. Tu peux ensuite personnaliser chaque option.</p>
+        <label class="toggle-row"><span><b>Afficher les objets décoratifs</b></span><input id="decorEnabled" type="checkbox"></label>
+        <label class="toggle-row"><span>Petits cailloux</span><input id="decorPebbles" type="checkbox" checked></label>
+        <label class="toggle-row"><span>Rochers</span><input id="decorRocks" type="checkbox" checked></label>
+        <label class="toggle-row"><span>Touffes d’herbe</span><input id="decorGrass" type="checkbox" checked></label>
+        <label class="toggle-row"><span>Conifères · arrière et côtés</span><input id="decorTrees" type="checkbox" checked></label>
+        <label class="range-label"><span>Densité <output id="decorDensityValue">45 %</output></span><input id="decorDensity" type="range" min="0" max="100" value="45" step="5"></label>
+        <label class="range-label"><span>Taille des objets <output id="decorScaleValue">1,0×</output></span><input id="decorScale" type="range" min="0.4" max="2" value="1" step="0.1"></label>
+        <label class="range-label"><span>Étendue autour des blocs <output id="decorSpreadValue">4 km</output></span><input id="decorSpread" type="range" min="2" max="8" value="4" step="0.5"></label>
+        <button id="randomizeDecor" class="secondary wide">Renouveler la disposition</button>
+        <p id="decorStatus" class="control-hint" aria-live="polite">Décor désactivé</p>
+        <p class="control-hint">Objets décoratifs de diorama, à taille artistique. Les arbres restent à l’arrière et sur les côtés ; un espace libre est réservé aux carnets. Inclus dans les exports vidéo.</p>
         </div>
       </details>
       <details class="control-section panel-section" data-panel-section id="blockEditorSection">
@@ -258,6 +277,6 @@
   </script>
   <script type="module" src="peak-dialog.mjs?v=9"></script>
   <script type="module" src="panel-sections.mjs?v=13"></script>
-  <script type="module" src="bootstrap.mjs?v=13"></script>
+  <script type="module" src="bootstrap.mjs?v=14"></script>
 </body>
 </html>

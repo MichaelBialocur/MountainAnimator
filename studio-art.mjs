@@ -40,7 +40,7 @@ function fbm(x,y,seed=41) {
   return noise(x,y,seed)*.55+noise(x*2,y*2,seed+7)*.27+noise(x*4,y*4,seed+19)*.13+noise(x*8,y*8,seed+43)*.05;
 }
 
-export const GROUND_KINDS=['marble','dark-marble','slate','wood','studio'];
+export const GROUND_KINDS=['marble','dark-marble','slate','wood','studio','meadow','earth','gravel'];
 
 export function paintGround(canvas,kind='marble') {
   const {width,height}=canvas,ctx=canvas.getContext('2d'),image=ctx.createImageData(width,height);
@@ -59,6 +59,23 @@ export function paintGround(canvas,kind='marble') {
       } else {
         const value=236+cloudy*15-vein*(48+warp*70)-threads*46+grain*2.8;
         r=value+3;g=value+1;b=value-4;
+      }
+    } else if (['meadow','earth','gravel'].includes(kind)) {
+      // Crossfade opposite edges of the noise field, so repeated tiles join.
+      const tile=(freq,seed)=>{
+        const a=fbm(u*freq,v*freq,seed),b=fbm((u-1)*freq,v*freq,seed),c=fbm(u*freq,(v-1)*freq,seed),d=fbm((u-1)*freq,(v-1)*freq,seed);
+        return (a*(1-u)+b*u)*(1-v)+(c*(1-u)+d*u)*v;
+      };
+      const patches=tile(5,341),detail=tile(44,928),fleck=grain*16;
+      if(kind==='meadow'){
+        const dirt=Math.max(0,(patches-.54)*4),dry=detail*23;
+        r=70+patches*33+dry+dirt*22+fleck;g=79+patches*44+dry-dirt*8+fleck;b=36+patches*22+dry*.6+fleck;
+      }else if(kind==='earth'){
+        const light=patches*34+detail*24+fleck;
+        r=61+light;g=47+light*.88;b=32+light*.71;
+      }else{
+        const pebble=detail> .52 ? 22: -8,light=patches*30+detail*42+fleck+pebble;
+        r=98+light;g=94+light;b=81+light;
       }
     } else if (kind==='wood') {
       const grainLine=Math.pow(Math.abs(Math.sin(v*320+fbm(u*7,v*25,12)*20)),16);

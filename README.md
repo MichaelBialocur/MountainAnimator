@@ -2,6 +2,12 @@
 
 Application web qui construit automatiquement des **découpes 3D photoréalistes de montagnes**, côte à côte et à la même échelle. L'objectif est de produire directement dans le navigateur le type de composition qui demanderait autrement plusieurs heures dans Blender.
 
+## Sol & décor (V14)
+
+La section repliable **Sol & décor** propose trois matériaux naturels (prairie alpine, terre de sous-bois et gravier), en plus des cinq sols existants. Trois ambiances règlent le sol et les objets en un clic : prairie, rocaille et lisière de forêt. Les petits cailloux, rochers, touffes d'herbe et conifères sont activables séparément ; densité, taille et étendue sont réglables.
+
+Les décors 3D utilisent des instances, des variations de forme/couleur et une répartition déterministe enregistrée dans chaque projet. La disposition évite l'emprise des montagnes et réserve la place des carnets ouverts (y compris pendant les mouvements de pages). Les arbres se placent derrière et sur les côtés. Les objets restent des accessoires de diorama à taille artistique, pas des arbres géographiques à l'échelle réelle. Ils reçoivent l'éclairage, projettent des ombres et figurent automatiquement dans le rendu vidéo image par image. Le marbre et l'absence de décor restent les valeurs initiales pour préserver les anciennes compositions.
+
 ## Fonctions principales (V7)
 
 - une seule scène Three.js, et non plusieurs cartes séparées ;

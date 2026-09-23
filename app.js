@@ -1,3 +1,4 @@
+import {DECOR_DEFAULTS,DECOR_PRESETS,cleanDecorSettings,planDecor,createSceneDecor} from './scene-decor.mjs?v=14';
 import {cleanPinVideo,videoStopPlan,samplePinVideo,videoScreenRect,drawVideoFrame} from './story-video.mjs?v=13';
 import {importVideo,mediaVideo,seekVideo,prepareVideos,releaseVideos} from './video-media.mjs?v=13';
 import {projectSession} from './project-store.mjs?v=13';
@@ -14,7 +15,7 @@ import { VideoExport, supportedVideoTypes, videoDimensions } from './video-expor
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { clamp, smootherstep, dampingAlpha, distanceKm, measureRoute, sampleRoute, smoothRoutePoint, clipToBounds, pointInOutline, interpolateGeo, routeMetrics } from './route-motion.mjs?v=7';
-import { paintGround, paintTravelNotebook, paintLiveGpxCard, paintStoryLabel, paintBookSpread, paintStoryPhoto, paintBookCover, GROUND_KINDS } from './studio-art.mjs?v=12';
+import { paintGround, paintTravelNotebook, paintLiveGpxCard, paintStoryLabel, paintBookSpread, paintStoryPhoto, paintBookCover, GROUND_KINDS } from './studio-art.mjs?v=14';
 
 const PEAKS = [
   { id:'chavalard', name:'Grand Chavalard', elevation:2899, lat:46.17869, lon:7.11312, region:'Fully' },
@@ -39,6 +40,7 @@ const TILE_CACHE = new Map();
 const $ = selector => document.querySelector(selector);
 
 const globalSettings = {
+  ...DECOR_DEFAULTS,
   showGpxStats:true, storyEnabled:true, gpxFollowDistance:1.6, terrainSmoothing:.35, quality:'high', exaggeration:1, brightness:1.25,
   sunAzimuth:315, sunElevation:38, sunIntensity:3.2,
   clouds:true, cloudDensity:8, cloudDetail:2, cloudOpacity:.7, cloudSize:1,
@@ -56,6 +58,7 @@ let rebuildTimer;
 let statsTimer;
 let sideMaterial;
 let floor;
+let groundDecor;
 let cloudTime = 0;
 const videoExport=new VideoExport();
 let exportCanvas, exportContext, exportSettings, exportUrl;
@@ -147,14 +150,47 @@ function setupEnvironment(){
 
 function applyGroundTexture(){
   const kind=globalSettings.groundTexture;
-  const c=document.createElement('canvas');c.width=1536;c.height=1024;
+  const c=document.createElement('canvas');const natural=['meadow','earth','gravel'].includes(kind);c.width=natural?768:1536;c.height=natural?768:1024;
   const texture=new THREE.CanvasTexture(paintGround(c,kind));texture.colorSpace=THREE.SRGBColorSpace;
   texture.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
-  // One continuous slab: no repeating, non-seamless tiles/checkerboard.
+  // Natural materials are periodic; studio slabs keep their continuous pattern.
+  if(natural){texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.repeat.set(14,9.8);}
   floor.material.map?.dispose();floor.material.map=texture;
+  floor.material.bumpMap=natural?texture:null;floor.material.bumpScale=natural?.025:0;
   const polished=kind==='marble'||kind==='dark-marble';
   floor.material.roughness=polished?.3:kind==='wood'?.72:.96;
   floor.material.clearcoat=polished?.8:0;floor.material.needsUpdate=true;
+}
+
+function refreshGroundDecor(){
+  if(groundDecor){scene.remove(groundDecor);groundDecor.userData.dispose();groundDecor=null;}
+  const mountains=blocks.map(b=>({x:b.group.position.x,z:b.group.position.z,radius:b.data.size/2}));
+  const books=blocks.filter(b=>b.config.showStats).map(b=>{
+    const w=Math.min(5.8,Math.max(4.6,b.data.size*.42)),h=w*2/3;
+    const x=b.group.position.x+b.config.statsX,z=b.data.size*.5+2.5+b.config.statsZ;
+    const halfX=(w/2+.18)*Math.cos(.07)+(h/2+.8)*Math.sin(.07),halfZ=(h/2+.8)*Math.cos(.07)+(w/2+.18)*Math.sin(.07);
+    return {minX:x-halfX,maxX:x+halfX,minZ:z-halfZ,maxZ:z+halfZ};
+  });
+  const items=planDecor(globalSettings,mountains,books);
+  if(items.length){groundDecor=createSceneDecor(items,{floorY:floor.position.y,shadows:globalSettings.shadows});scene.add(groundDecor);}
+  const status=$('#decorStatus');if(status)status.textContent=globalSettings.decorEnabled?`${items.length} éléments · disposition conservée dans le projet`:'Décor désactivé';
+  fitTerrainShadows();
+}
+function syncDecorControls(){
+  for(const key of ['decorEnabled','decorPebbles','decorRocks','decorGrass','decorTrees'])$('#'+key).checked=globalSettings[key];
+  for(const key of ['decorDensity','decorScale','decorSpread']){
+    $('#'+key).value=globalSettings[key];$('#'+key+'Value').value=key==='decorDensity'?`${globalSettings[key]} %`:key==='decorScale'?`${globalSettings[key].toFixed(1)}×`:`${globalSettings[key]} km`;
+  }
+  $('#groundTexture').value=globalSettings.groundTexture;
+}
+function bindDecorControls(){
+  syncDecorControls();
+  for(const key of ['decorEnabled','decorPebbles','decorRocks','decorGrass','decorTrees'])$('#'+key).addEventListener('change',e=>{globalSettings[key]=e.target.checked;refreshGroundDecor();saveProject();});
+  for(const key of ['decorDensity','decorScale','decorSpread'])bindRange(key,key+'Value',v=>key==='decorDensity'?`${v} %`:key==='decorScale'?`${v.toFixed(1)}×`:`${v} km`,v=>{globalSettings[key]=v;refreshGroundDecor();});
+  $('#decorPreset').addEventListener('change',e=>{
+    const preset=DECOR_PRESETS[e.target.value];if(!preset)return;Object.assign(globalSettings,preset);syncDecorControls();applyGroundTexture();refreshGroundDecor();saveProject();e.target.value='';
+  });
+  $('#randomizeDecor').addEventListener('click',()=>{globalSettings.decorSeed=globalSettings.decorSeed%2147483647+1;refreshGroundDecor();saveProject();});
 }
 
 function makeStoneTexture(){
@@ -258,6 +294,7 @@ async function rebuildScene(){
 }
 
 function clearBlocks(){
+  if(groundDecor){scene.remove(groundDecor);groundDecor.userData.dispose();groundDecor=null;}
   cancelStoryPick();stopCinema();
   blocks.forEach(block=>{
     scene.remove(block.group);block.group.userData.route?.geometry?.dispose();
@@ -506,7 +543,7 @@ function positionBlocks(){
   const gap=1.15, total=blocks.reduce((sum,block)=>sum+block.data.size,0)+gap*Math.max(0,blocks.length-1);
   let cursor=-total/2;
   blocks.forEach(block=>{block.group.position.x=cursor+block.data.size/2;cursor+=block.data.size+gap});
-  clearCloudTerrain();fitTerrainShadows();syncCinemaEditor();blocks.forEach(positionNotebook);
+  clearCloudTerrain();fitTerrainShadows();syncCinemaEditor();blocks.forEach(positionNotebook);refreshGroundDecor();
 }
 
 function createPeakLabels(){
@@ -565,7 +602,7 @@ function refreshStatsBillboards(){
     book.userData.setState(block.config.bookIndex||0);book.userData.setOpenness(block.config.bookOpenAtStart?0:1);
     block.group.add(book);data.statsCard=book;positionNotebook(block);
   });
-  fitTerrainShadows();
+  refreshGroundDecor();
 }
 
 function updateComparison(list=activePeaks()){
@@ -834,6 +871,7 @@ function applyLighting(){
 }
 
 function bindControls(){
+  bindDecorControls();
   bindCinemaControls();bindStoryControls();bindNotebookControls();
   hydrateNarrativeMedia();
   bindRange('gpxFollowDistance','gpxFollowDistanceValue',v=>`${v.toFixed(1).replace('.',',')}×`,v=>{
@@ -871,7 +909,7 @@ function bindControls(){
   bindRange('sunAzimuth','sunAzimuthValue',value=>`${Math.round(value)}°`,value=>{globalSettings.sunAzimuth=value;applyLighting()});
   bindRange('sunElevation','sunElevationValue',value=>`${Math.round(value)}°`,value=>{globalSettings.sunElevation=value;applyLighting()});
   bindRange('sunIntensity','sunIntensityValue',value=>value.toFixed(1).replace('.',','),value=>{globalSettings.sunIntensity=value;applyLighting()});
-  $('#shadowToggle').checked=globalSettings.shadows;$('#shadowToggle').addEventListener('change',event=>{globalSettings.shadows=event.target.checked;renderer.shadowMap.enabled=globalSettings.shadows;blocks.forEach(block=>{block.group.userData.top.castShadow=block.group.userData.top.receiveShadow=globalSettings.shadows;block.group.userData.side.castShadow=block.group.userData.side.receiveShadow=globalSettings.shadows});saveProject()});
+  $('#shadowToggle').checked=globalSettings.shadows;$('#shadowToggle').addEventListener('change',event=>{globalSettings.shadows=event.target.checked;renderer.shadowMap.enabled=globalSettings.shadows;blocks.forEach(block=>{block.group.userData.top.castShadow=block.group.userData.top.receiveShadow=globalSettings.shadows;block.group.userData.side.castShadow=block.group.userData.side.receiveShadow=globalSettings.shadows});refreshGroundDecor();saveProject()});
   $('#groundTexture').value=globalSettings.groundTexture;$('#groundTexture').addEventListener('change',event=>{globalSettings.groundTexture=event.target.value;applyGroundTexture();saveProject();});
   $('#cloudToggle').checked=globalSettings.clouds;$('#cloudToggle').addEventListener('change',event=>{globalSettings.clouds=event.target.checked;blocks.forEach(block=>block.group.userData.clouds.visible=globalSettings.clouds);saveProject()});
   bindRange('cloudDensity','cloudDensityValue',value=>String(Math.round(value)),value=>{globalSettings.cloudDensity=Math.round(value);refreshClouds()});
@@ -970,6 +1008,7 @@ function restoreProject(){
     narrativePins=sanitizeStoryPins(saved.narrativePins);
     if(Array.isArray(saved.cameraShots))cameraShots=saved.cameraShots.slice(0,30).filter(s=>['orbit','transfer','book'].includes(s.type));
     if(Array.isArray(saved.customPeaks))peaks=[...PEAKS,...saved.customPeaks];if(Array.isArray(saved.selected))selected=saved.selected.filter(id=>peaks.some(peak=>peak.id===id)).slice(0,MAX_PEAKS);Object.assign(globalSettings,saved.globalSettings||{});if(!QUALITY[globalSettings.quality])globalSettings.quality='high';
+    Object.assign(globalSettings,cleanDecorSettings(globalSettings));
     if(!GROUND_KINDS.includes(globalSettings.groundTexture))globalSettings.groundTexture='marble';
     if(typeof globalSettings.showGpxStats!=='boolean')globalSettings.showGpxStats=true;
     globalSettings.gpxFollowDistance=clamp(Number(globalSettings.gpxFollowDistance)||1.6,.6,4);
@@ -1148,6 +1187,7 @@ function fitTerrainShadows(){
   scene.updateMatrixWorld(true);
   const bounds=new THREE.Box3();
   blocks.forEach(block=>{bounds.expandByObject(block.group.userData.top);bounds.expandByObject(block.group.userData.side);const book=block.group.userData.statsCard;if(book){book.updateWorldMatrix(true,true);for(const x of [-book.userData.width/2,book.userData.width/2])for(const y of [0,book.userData.width/2+.3])for(const z of [-book.userData.height/2,book.userData.height/2])bounds.expandByPoint(book.localToWorld(new THREE.Vector3(x,y,z)));}});
+  if(groundDecor)bounds.expandByObject(groundDecor);
   const center=bounds.getCenter(new THREE.Vector3()),size=bounds.getSize(new THREE.Vector3());
   const az=THREE.MathUtils.degToRad(globalSettings.sunAzimuth),el=THREE.MathUtils.degToRad(globalSettings.sunElevation);
   const distance=Math.max(48,size.length()*1.6);

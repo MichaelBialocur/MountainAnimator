@@ -1,11 +1,11 @@
 {
   "name": "mountain-animator",
-  "version": "13.0.0",
+  "version": "14.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check app.js && node --check route-motion.mjs && node --check studio-art.mjs && node --check peak-dialog.mjs && node --check atmosphere.mjs && node --check video-export.mjs && node --check terrain-data.mjs && node --check camera-sequence.mjs && node --check gpx-story.mjs && node --check panel-sections.mjs && node --check travel-book.mjs && node --check narrative-media.mjs && node --check project-store.mjs && node --check project-manager.mjs && node --check workspace-db.mjs && node --check bootstrap.mjs && node --check service-worker.js && node --check install-app.mjs && node --check story-video.mjs && node --check video-media.mjs"
+    "check": "node --check scene-decor.mjs && node --check app.js && node --check route-motion.mjs && node --check studio-art.mjs && node --check peak-dialog.mjs && node --check atmosphere.mjs && node --check video-export.mjs && node --check terrain-data.mjs && node --check camera-sequence.mjs && node --check gpx-story.mjs && node --check panel-sections.mjs && node --check travel-book.mjs && node --check narrative-media.mjs && node --check project-store.mjs && node --check project-manager.mjs && node --check workspace-db.mjs && node --check bootstrap.mjs && node --check service-worker.js && node --check install-app.mjs && node --check story-video.mjs && node --check video-media.mjs"
   },
   "devDependencies": {
     "fake-indexeddb": "^6.2.4",
