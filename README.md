@@ -2,6 +2,14 @@
 
 Application web qui construit automatiquement des **découpes 3D photoréalistes de montagnes**, côte à côte et à la même échelle. L'objectif est de produire directement dans le navigateur le type de composition qui demanderait autrement plusieurs heures dans Blender.
 
+## Forêts et pierres sur les montagnes (V15)
+
+Dans **Bloc individuel → Forêt & pierres sur le relief**, activer « Décorer la surface de ce sommet ». Les couleurs de l'image satellite suggèrent les zones boisées (vert sombre texturé) et minérales (teintes neutres ou chaudes). Un aperçu les montre en vert et ocre. Il s'agit d'une estimation RGB, pas d'une carte d'occupation du sol : les ombres, les prairies sombres, les routes ou les toits peuvent être confondus. La sensibilité forêt et la limite d'altitude permettent d'ajuster le résultat ; la détection ne distingue pas les essences d'arbres.
+
+Les sapins évitent les pentes supérieures à 39° ; les pierres évitent celles supérieures à 52°. La neige claire et les teintes d'eau sont exclues. Si la couche de neige ajoutée est active, une marge conservatrice exclut les objets à partir de 100 m sous sa limite. La taille est métrique : sapins d'environ 25 m et pierres de 3 m par défaut, avec variations. Il faut zoomer pour voir ces détails. Leur base suit les triangles du maillage (et non une interpolation bilinéaire pouvant provoquer un flottement), les pierres s'orientent selon la pente et les arbres restent verticaux. Rotation, décentrage, lissage et exagération verticale restent compatibles.
+
+Densités, tailles, choix d'objets, sensibilité et graine sont sauvegardés par sommet dans le projet. La disposition reste déterministe à données, qualité et réglages identiques, et figure dans les exports vidéo. Géométries allégées et instances limitent les coûts : plafonds par montagne de 1 000 / 2 500 / 4 500 sapins et 500 / 1 200 / 2 000 pierres en qualité Équilibrée / Haute / Ultra, réduits par la densité, la surface et les exclusions. Le décor est désactivé initialement pour préserver les projets existants.
+
 ## Sol & décor (V14)
 
 La section repliable **Sol & décor** propose trois matériaux naturels (prairie alpine, terre de sous-bois et gravier), en plus des cinq sols existants. Trois ambiances règlent le sol et les objets en un clic : prairie, rocaille et lisière de forêt. Les petits cailloux, rochers, touffes d'herbe et conifères sont activables séparément ; densité, taille et étendue sont réglables.

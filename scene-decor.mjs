@@ -49,18 +49,20 @@ export function planDecor(settings,mountains=[],books=[]){
   return items;
 }
 
-function rockGeometry(variant){
-  const g=new THREE.IcosahedronGeometry(1,2),p=g.attributes.position;
+function rockGeometry(variant,detail=2){
+  const g=new THREE.IcosahedronGeometry(1,detail),p=g.attributes.position;
   for(let i=0;i<p.count;i++){
     const x=p.getX(i),y=p.getY(i),z=p.getZ(i),n=1+.13*Math.sin(x*6+variant*7)*Math.cos(z*5+y*4)+.05*Math.sin(y*13+x*3);
     p.setXYZ(i,x*n*.8,Math.max(0,(y*n+1.2)*.39),z*n*.72);
   }
   g.computeBoundingBox();g.translate(0,-g.boundingBox.min.y,0);g.computeVertexNormals();return g;
 }
-function firGeometry(){
+function firGeometry(compact=false){
   const parts=[];
-  for(let tier=0;tier<9;tier++){
-    const radius=.43*(1-tier/10),g=new THREE.ConeGeometry(radius,.39,18,2),p=g.attributes.position;
+  const tiers=compact?5:9;
+  for(let layer=0;layer<tiers;layer++){
+    const tier=layer*8/(tiers-1);
+    const radius=.43*(1-tier/10),g=new THREE.ConeGeometry(radius,compact?.5:.39,compact?8:18,compact?1:2),p=g.attributes.position;
     for(let i=0;i<p.count;i++){
       const x=p.getX(i),z=p.getZ(i),a=Math.atan2(z,x),f=1+.16*Math.sin(a*7+tier*2)+.08*Math.cos(a*11);
       p.setXYZ(i,x*f,p.getY(i)+.03*Math.sin(a*9+tier),z*f);
@@ -79,7 +81,7 @@ function grassGeometry(){
   }
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));g.computeVertexNormals();return g;
 }
-export function createSceneDecor(items,{floorY=-.455,shadows=true}={}){
+export function createSceneDecor(items,{floorY=-.455,shadows=true,surface=false}={}){
   const root=new THREE.Group();root.name='natural-ground-decor';root.userData.items=items;
   const matrix=new THREE.Object3D(),color=new THREE.Color();
   function batch(name,list,geometry,material,factor,palette){
@@ -87,17 +89,18 @@ export function createSceneDecor(items,{floorY=-.455,shadows=true}={}){
     const mesh=new THREE.InstancedMesh(geometry,material,list.length);mesh.name=name;
     mesh.castShadow=shadows;mesh.receiveShadow=true;
     list.forEach((p,i)=>{
-      matrix.position.set(p.x,floorY,p.z);matrix.rotation.set(0,p.angle,0);matrix.scale.setScalar(p.size*factor);matrix.updateMatrix();mesh.setMatrixAt(i,matrix.matrix);
+      matrix.position.set(p.x,p.y??floorY,p.z);matrix.rotation.set(0,p.angle,0);
+      if(p.normal)matrix.quaternion.premultiply(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),new THREE.Vector3(...p.normal)));matrix.scale.setScalar(p.size*factor);matrix.updateMatrix();mesh.setMatrixAt(i,matrix.matrix);
       color.set(palette[0]).lerp(new THREE.Color(palette[1]),p.tint);mesh.setColorAt(i,color);
     });
     mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingBox();mesh.computeBoundingSphere();root.add(mesh);
   }
   const stone=()=>new THREE.MeshStandardMaterial({roughness:.96});
-  for(const type of ['rock','pebble'])for(let v=0;v<3;v++)batch(type+'-'+v,items.filter(p=>p.type===type&&p.variant===v),rockGeometry(v),stone(),type==='rock'?.26:.075,['#696759','#b2aaa0']);
+  for(const type of ['rock','pebble'])for(let v=0;v<3;v++)batch(type+'-'+v,items.filter(p=>p.type===type&&p.variant===v),rockGeometry(v,surface?1:2),stone(),type==='rock'?.26:.075,['#696759','#b2aaa0']);
   const trees=items.filter(p=>p.type==='tree');
   const trunk=new THREE.CylinderGeometry(.022,.052,1.2,7);trunk.translate(0,.6,0);
   batch('tree-trunks',trees,trunk,new THREE.MeshStandardMaterial({roughness:1}),1,['#4d3c29','#807052']);
-  batch('tree-foliage',trees,firGeometry(),new THREE.MeshStandardMaterial({roughness:1}),1,['#233c27','#587044']);
+  batch('tree-foliage',trees,firGeometry(surface),new THREE.MeshStandardMaterial({roughness:1}),1,['#233c27','#587044']);
   batch('grass',items.filter(p=>p.type==='grass'),grassGeometry(),new THREE.MeshStandardMaterial({roughness:1,side:THREE.DoubleSide,vertexColors:true}),1,['#79824a','#b0a770']);
   root.userData.dispose=()=>{root.children.forEach(mesh=>{mesh.dispose();mesh.geometry.dispose();mesh.material.dispose();});root.clear();};return root;
 }

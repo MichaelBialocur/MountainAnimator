@@ -99,6 +99,22 @@
         <label class="range-label"><span>Altitude de début <output id="snowAltitudeValue"></output></span><input id="snowAltitude" type="range" min="0" max="6000" step="50" value="2800"></label>
         <label class="range-label"><span>Couverture neigeuse <output id="snowCoverageValue">68 %</output></span><input id="snowCoverage" type="range" min="0.15" max="1" value="0.68" step="0.01"></label>
         <p class="control-hint">La neige se répartit en plaques selon la pente et laisse des rochers apparents. Ajoute de la neige aux textures satellite ; ne supprime pas la neige déjà photographiée.</p>
+        <details class="story-editor" id="surfaceDecorSection">
+          <summary>Forêt &amp; pierres sur le relief</summary>
+          <label class="toggle-row"><span><b>Décorer la surface de ce sommet</b></span><input id="surfaceEnabled" type="checkbox"></label>
+          <label class="toggle-row"><span>Sapins dans les zones boisées</span><input id="surfaceTrees" type="checkbox" checked></label>
+          <label class="range-label"><span>Densité des sapins <output id="surfaceTreeDensityValue">55 %</output></span><input id="surfaceTreeDensity" type="range" min="0" max="100" step="5" value="55"></label>
+          <label class="range-label"><span>Hauteur des sapins <output id="surfaceTreeHeightValue">25 m</output></span><input id="surfaceTreeHeight" type="range" min="8" max="60" step="1" value="25"></label>
+          <label class="range-label"><span>Altitude maximale des sapins <output id="surfaceTreeAltitudeValue">2400 m</output></span><input id="surfaceTreeAltitude" type="range" min="500" max="4000" step="50" value="2400"></label>
+          <label class="range-label"><span>Sensibilité forêt <output id="surfaceSensitivityValue">50 %</output></span><input id="surfaceSensitivity" type="range" min="0.2" max="0.85" step="0.05" value="0.5"></label>
+          <label class="toggle-row"><span>Pierres dans les zones rocheuses</span><input id="surfaceRocks" type="checkbox" checked></label>
+          <label class="range-label"><span>Densité des pierres <output id="surfaceRockDensityValue">50 %</output></span><input id="surfaceRockDensity" type="range" min="0" max="100" step="5" value="50"></label>
+          <label class="range-label"><span>Diamètre des pierres <output id="surfaceRockSizeValue">3 m</output></span><input id="surfaceRockSize" type="range" min="0.5" max="12" step="0.5" value="3"></label>
+          <button id="randomizeSurface" class="secondary wide">Renouveler le décor de ce sommet</button>
+          <p id="surfaceStatus" class="control-hint" role="status">Décor du relief désactivé</p>
+          <canvas id="surfacePreview" width="256" height="256" style="width:100%;max-height:220px;object-fit:contain;border-radius:10px" aria-label="Zones estimées sur l’image satellite : forêt en vert, roche en ocre" hidden></canvas>
+          <p class="control-hint">Aperçu : forêt en vert, roche en ocre. Estimation par couleurs, pas une carte forestière. La pente, l’altitude et la neige limitent ensuite le placement. Objets à taille réelle : zoome sur les versants pour les voir.</p>
+        </details>
         <label class="comment-label">Commentaire du carnet<textarea id="blockComment" rows="3" placeholder="Ex. Sommet atteint après le Jegihorn…"></textarea></label>
         <label class="toggle-row"><span><b>Carnet de voyage devant la montagne</b><small>Altitude, commentaire et GPX</small></span><input id="blockStatsToggle" type="checkbox" checked></label>
 <label class="range-label"><span>Carnet · gauche / droite <output id="statsXValue"></output></span><input id="statsX" type="range" min="-20" max="20" value="0" step="0.1"></label>
@@ -277,6 +293,6 @@
   </script>
   <script type="module" src="peak-dialog.mjs?v=9"></script>
   <script type="module" src="panel-sections.mjs?v=13"></script>
-  <script type="module" src="bootstrap.mjs?v=14"></script>
+  <script type="module" src="bootstrap.mjs?v=15"></script>
 </body>
 </html>

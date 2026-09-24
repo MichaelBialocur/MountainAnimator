@@ -1,4 +1,5 @@
-import {DECOR_DEFAULTS,DECOR_PRESETS,cleanDecorSettings,planDecor,createSceneDecor} from './scene-decor.mjs?v=14';
+import {SURFACE_DEFAULTS,cleanSurfaceSettings,analyzeSurfacePixels,planSurfaceDecor} from './surface-decor.mjs?v=15';
+import {DECOR_DEFAULTS,DECOR_PRESETS,cleanDecorSettings,planDecor,createSceneDecor} from './scene-decor.mjs?v=15';
 import {cleanPinVideo,videoStopPlan,samplePinVideo,videoScreenRect,drawVideoFrame} from './story-video.mjs?v=13';
 import {importVideo,mediaVideo,seekVideo,prepareVideos,releaseVideos} from './video-media.mjs?v=13';
 import {projectSession} from './project-store.mjs?v=13';
@@ -59,6 +60,8 @@ let statsTimer;
 let sideMaterial;
 let floor;
 let groundDecor;
+let surfaceTimer;
+const pendingSurface=new Set();
 let cloudTime = 0;
 const videoExport=new VideoExport();
 let exportCanvas, exportContext, exportSettings, exportUrl;
@@ -123,7 +126,7 @@ controls.addEventListener('end',()=>{if(!cinema.playing&&!gpxPlayer.playing&&!ex
 requestAnimationFrame(animate);
 
 function defaultBlockSettings(){
-  return { bookOpenAtStart:false, bookCloseAtEnd:false, bookCoverTitle:'', bookCoverSubtitle:'', bookCoverColor:'#334e43', bookCoverImage:'', bookPages:[], bookIndex:0, bookHold:7, gpxWidth:4, notebookLayout:1, snowCoverage:.68, snowEnabled:false, snowAltitude:2800, statsX:0, statsY:0, statsZ:0, diameter:12, centerEast:0, centerNorth:0, rotation:0, gpxColor:'#e76f32', comment:'', showStats:true, manualDistance:'', manualGain:'', manualDuration:'', manualDate:'', manualNotes:'' };
+  return { ...SURFACE_DEFAULTS, bookOpenAtStart:false, bookCloseAtEnd:false, bookCoverTitle:'', bookCoverSubtitle:'', bookCoverColor:'#334e43', bookCoverImage:'', bookPages:[], bookIndex:0, bookHold:7, gpxWidth:4, notebookLayout:1, snowCoverage:.68, snowEnabled:false, snowAltitude:2800, statsX:0, statsY:0, statsZ:0, diameter:12, centerEast:0, centerNorth:0, rotation:0, gpxColor:'#e76f32', comment:'', showStats:true, manualDistance:'', manualGain:'', manualDuration:'', manualDate:'', manualNotes:'' };
 }
 
 function settingsFor(id){
@@ -193,6 +196,60 @@ function bindDecorControls(){
   $('#randomizeDecor').addEventListener('click',()=>{globalSettings.decorSeed=globalSettings.decorSeed%2147483647+1;refreshGroundDecor();saveProject();});
 }
 
+function removeSurfaceDecor(block){
+  const root=block.group.userData.surfaceDecor;if(root){block.group.remove(root);root.userData.dispose();block.group.userData.surfaceDecor=null;}
+}
+function refreshSurfaceDecor(block){
+  removeSurfaceDecor(block);block.group.userData.surfaceError='';
+  if(!block.config.surfaceEnabled)return;
+  try{
+    if(!block.data.surfaceMask){
+      const image=document.createElement('canvas');image.width=image.height=512;
+      const ctx=image.getContext('2d',{willReadFrequently:true});ctx.drawImage(block.data.textureCanvas,0,0,512,512);
+      block.data.surfaceImage=ctx.getImageData(0,0,512,512);block.data.surfaceMask=analyzeSurfacePixels(block.data.surfaceImage);
+    }
+    const items=planSurfaceDecor(block.data,block.data.surfaceMask,organicOutline(hash(block.peak.id)),block.config,{seed:hash(block.peak.id),exaggeration:globalSettings.exaggeration,quality:globalSettings.quality});
+    if(items.length){const root=createSceneDecor(items,{shadows:globalSettings.shadows,surface:true});root.name='mountain-surface-decor';block.group.add(root);block.group.userData.surfaceDecor=root;}
+  }catch(error){block.group.userData.surfaceError='Analyse satellite indisponible pour ce sommet. Réessaie après avoir rechargé le relief.';console.warn('Surface decor:',error);}
+}
+function surfaceOutput(key,value){return key==='surfaceSensitivity'?`${Math.round(value*100)} %`:key.endsWith('Density')?`${value} %`:`${value} m`;}
+function syncSurfaceControls(){
+  const c=settingsFor(editorPeakId);
+  for(const key of ['surfaceEnabled','surfaceTrees','surfaceRocks'])$('#'+key).checked=c[key];
+  for(const key of ['surfaceTreeDensity','surfaceRockDensity','surfaceTreeHeight','surfaceRockSize','surfaceTreeAltitude','surfaceSensitivity']){
+    $('#'+key).value=c[key];$('#'+key+'Value').value=surfaceOutput(key,c[key]);
+  }
+  const b=blocks.find(b=>b.peak.id===editorPeakId),items=b?.group.userData.surfaceDecor?.userData.items||[];
+  $('#surfaceStatus').textContent=!c.surfaceEnabled?'Décor du relief désactivé':b?.group.userData.surfaceError||(b?`${items.filter(p=>p.type==='tree').length} sapins · ${items.filter(p=>p.type==='rock').length} pierres${items.length?'':' · aucune zone compatible avec ces réglages'}`:'En attente du relief…');
+  const preview=$('#surfacePreview');preview.hidden=!c.surfaceEnabled||!b?.data.surfaceMask;
+  if(!preview.hidden){
+    const source=b.data.surfaceImage,mask=b.data.surfaceMask,ctx=preview.getContext('2d');preview.width=mask.width;preview.height=mask.height;
+    const image=ctx.createImageData(mask.width,mask.height);image.data.set(source.data);
+    for(let i=0;i<mask.forest.length;i++){
+      const color=c.surfaceTrees&&mask.forest[i]>=1-c.surfaceSensitivity?[46,182,90]:c.surfaceRocks&&mask.rock[i]>=.52?[220,150,75]:null;
+      if(color)for(let ch=0;ch<3;ch++)image.data[i*4+ch]=image.data[i*4+ch]*.45+color[ch]*.55;
+    }
+    ctx.putImageData(image,0,0);
+  }
+}
+function flushSurfaceDecor(){
+  clearTimeout(surfaceTimer);if(!pendingSurface.size)return;
+  blocks.filter(b=>pendingSurface.has(b.peak.id)).forEach(refreshSurfaceDecor);pendingSurface.clear();syncSurfaceControls();fitTerrainShadows();
+}
+function scheduleSurfaceDecor(id){
+  for(const b of blocks)if(!id||b.peak.id===id)pendingSurface.add(b.peak.id);
+  clearTimeout(surfaceTimer);surfaceTimer=setTimeout(flushSurfaceDecor,160);
+}
+function bindSurfaceControls(){
+  for(const key of ['surfaceEnabled','surfaceTrees','surfaceRocks'])$('#'+key).addEventListener('change',event=>{
+    settingsFor(editorPeakId)[key]=event.target.checked;const b=blocks.find(b=>b.peak.id===editorPeakId);if(b)refreshSurfaceDecor(b);syncSurfaceControls();fitTerrainShadows();saveProject();
+  });
+  for(const key of ['surfaceTreeDensity','surfaceRockDensity','surfaceTreeHeight','surfaceRockSize','surfaceTreeAltitude','surfaceSensitivity'])$('#'+key).addEventListener('input',event=>{
+    const c=settingsFor(editorPeakId);c[key]=+event.target.value;$('#'+key+'Value').value=surfaceOutput(key,c[key]);scheduleSurfaceDecor(editorPeakId);saveProject();
+  });
+  $('#randomizeSurface').addEventListener('click',()=>{const c=settingsFor(editorPeakId);c.surfaceSeed=c.surfaceSeed%2147483647+1;const b=blocks.find(b=>b.peak.id===editorPeakId);if(b)refreshSurfaceDecor(b);syncSurfaceControls();saveProject();});
+}
+
 function makeStoneTexture(){
   const c=document.createElement('canvas'); c.width=c.height=768;
   const ctx=c.getContext('2d'), image=ctx.createImageData(768,768), rng=seededRandom(4937);
@@ -247,6 +304,7 @@ function syncBlockEditor(){
   if(!list.some(peak=>peak.id===editorPeakId)) editorPeakId=list[0].id;
   select.innerHTML=list.map(peak=>`<option value="${peak.id}" ${peak.id===editorPeakId?'selected':''}>${escapeHtml(peak.name)}</option>`).join('');
   const config=settingsFor(editorPeakId);
+  syncSurfaceControls();
   $('#blockDiameter').value=config.diameter; $('#blockDiameterValue').value=`${config.diameter} km`;
   $('#blockRotation').value=config.rotation;$('#blockRotationValue').value=`${config.rotation}°`;
   $('#gpxColor').value=config.gpxColor;$('#gpxWidth').value=config.gpxWidth;$('#gpxWidthValue').value=`${config.gpxWidth} px`;
@@ -289,14 +347,16 @@ async function rebuildScene(){
   createPeakLabels();
   fitCamera();
   if(restoredView){const v=restoredView;restoredView=null;if(v.position?.length===3&&v.target?.length===3&&[...v.position,...v.target].every(Number.isFinite)){camera.position.fromArray(v.position);controls.target.fromArray(v.target);camera.lookAt(controls.target);controls.update(0);}}
-  hideLoading();
+  syncSurfaceControls();hideLoading();
   if(results.some(Boolean)&&results.some(value=>!value)) showError('Certaines découpes n’ont pas chargé. Vérifie la connexion puis modifie légèrement un réglage pour réessayer.');
 }
 
 function clearBlocks(){
+  clearTimeout(surfaceTimer);pendingSurface.clear();
   if(groundDecor){scene.remove(groundDecor);groundDecor.userData.dispose();groundDecor=null;}
   cancelStoryPick();stopCinema();
   blocks.forEach(block=>{
+    removeSurfaceDecor(block);
     scene.remove(block.group);block.group.userData.route?.geometry?.dispose();
     const disposedMaterials=new Set(),disposedTextures=new Set(),disposedGeometries=new Set();
     block.group.traverse(object=>{
@@ -439,7 +499,7 @@ function createBlock(data,peak,config){
   const summitMarker=createSummitMarker(summitLocal); group.add(summitMarker);
   const clouds=createClouds(peak,data.size); group.add(clouds);
   group.userData={peak,config,data,top,side,bottom,summitMarker,summitLocal,clouds,label:null,route:null,routeStats:null,statsCard:null,statsLeader:null};
-  scene.add(group); return {group,peak,config,data};
+  scene.add(group);const block={group,peak,config,data};refreshSurfaceDecor(block);return block;
 }
 
 function createTopGeometry(data){
@@ -632,7 +692,7 @@ function updateVerticalScale(){
     sidePosition.needsUpdate=true;block.group.userData.side.geometry.computeVertexNormals();
     const summit=localPointForGeo(block.peak,data,block.peak.elevation);block.group.userData.summitLocal.copy(summit);block.group.userData.summitMarker.position.copy(summit).add(new THREE.Vector3(0,.025,0));
   });
-  clearCloudTerrain();fitTerrainShadows();buildGpxRoutes();
+  blocks.forEach(refreshSurfaceDecor);syncSurfaceControls();clearCloudTerrain();fitTerrainShadows();buildGpxRoutes();
 }
 
 function parseGpx(text){
@@ -871,7 +931,7 @@ function applyLighting(){
 }
 
 function bindControls(){
-  bindDecorControls();
+  bindDecorControls();bindSurfaceControls();
   bindCinemaControls();bindStoryControls();bindNotebookControls();
   hydrateNarrativeMedia();
   bindRange('gpxFollowDistance','gpxFollowDistanceValue',v=>`${v.toFixed(1).replace('.',',')}×`,v=>{
@@ -909,7 +969,7 @@ function bindControls(){
   bindRange('sunAzimuth','sunAzimuthValue',value=>`${Math.round(value)}°`,value=>{globalSettings.sunAzimuth=value;applyLighting()});
   bindRange('sunElevation','sunElevationValue',value=>`${Math.round(value)}°`,value=>{globalSettings.sunElevation=value;applyLighting()});
   bindRange('sunIntensity','sunIntensityValue',value=>value.toFixed(1).replace('.',','),value=>{globalSettings.sunIntensity=value;applyLighting()});
-  $('#shadowToggle').checked=globalSettings.shadows;$('#shadowToggle').addEventListener('change',event=>{globalSettings.shadows=event.target.checked;renderer.shadowMap.enabled=globalSettings.shadows;blocks.forEach(block=>{block.group.userData.top.castShadow=block.group.userData.top.receiveShadow=globalSettings.shadows;block.group.userData.side.castShadow=block.group.userData.side.receiveShadow=globalSettings.shadows});refreshGroundDecor();saveProject()});
+  $('#shadowToggle').checked=globalSettings.shadows;$('#shadowToggle').addEventListener('change',event=>{globalSettings.shadows=event.target.checked;renderer.shadowMap.enabled=globalSettings.shadows;blocks.forEach(block=>{block.group.userData.top.castShadow=block.group.userData.top.receiveShadow=globalSettings.shadows;block.group.userData.side.castShadow=block.group.userData.side.receiveShadow=globalSettings.shadows});blocks.forEach(refreshSurfaceDecor);refreshGroundDecor();saveProject()});
   $('#groundTexture').value=globalSettings.groundTexture;$('#groundTexture').addEventListener('change',event=>{globalSettings.groundTexture=event.target.value;applyGroundTexture();saveProject();});
   $('#cloudToggle').checked=globalSettings.clouds;$('#cloudToggle').addEventListener('change',event=>{globalSettings.clouds=event.target.checked;blocks.forEach(block=>block.group.userData.clouds.visible=globalSettings.clouds);saveProject()});
   bindRange('cloudDensity','cloudDensityValue',value=>String(Math.round(value)),value=>{globalSettings.cloudDensity=Math.round(value);refreshClouds()});
@@ -1013,7 +1073,7 @@ function restoreProject(){
     if(typeof globalSettings.showGpxStats!=='boolean')globalSettings.showGpxStats=true;
     globalSettings.gpxFollowDistance=clamp(Number(globalSettings.gpxFollowDistance)||1.6,.6,4);
     if(!Number.isFinite(globalSettings.cloudSeed))globalSettings.cloudSeed=1;
-    Object.entries(saved.blockSettings||{}).forEach(([id,value])=>{const config={...defaultBlockSettings(),...value};config.bookPages=cleanBookPages(config.bookPages);config.bookOpenAtStart=config.bookOpenAtStart===true;config.bookCloseAtEnd=config.bookCloseAtEnd===true;config.bookCoverTitle=String(config.bookCoverTitle||'').slice(0,80);config.bookCoverSubtitle=String(config.bookCoverSubtitle||'').slice(0,160);config.bookCoverColor=/^#[0-9a-f]{6}$/i.test(config.bookCoverColor)?config.bookCoverColor:'#334e43';config.bookCoverImage=validMediaId(config.bookCoverImage);config.bookIndex=clamp(Math.floor(Number(config.bookIndex)||0),0,config.bookPages.length);config.bookHold=clamp(Number(config.bookHold)||7,4,20);if(!value.notebookLayout){config.statsX=0;config.statsY=0;config.statsZ=0;}config.gpxWidth=clamp(Number(config.gpxWidth)||4,1,16);config.rotation=clamp(Number(config.rotation)||0,-180,180);if(!/^#[0-9a-f]{6}$/i.test(config.gpxColor))config.gpxColor='#e76f32';blockSettings.set(id,config);});editorPeakId=selected[0]||'';
+    Object.entries(saved.blockSettings||{}).forEach(([id,value])=>{const config={...defaultBlockSettings(),...value};Object.assign(config,cleanSurfaceSettings(config));config.bookPages=cleanBookPages(config.bookPages);config.bookOpenAtStart=config.bookOpenAtStart===true;config.bookCloseAtEnd=config.bookCloseAtEnd===true;config.bookCoverTitle=String(config.bookCoverTitle||'').slice(0,80);config.bookCoverSubtitle=String(config.bookCoverSubtitle||'').slice(0,160);config.bookCoverColor=/^#[0-9a-f]{6}$/i.test(config.bookCoverColor)?config.bookCoverColor:'#334e43';config.bookCoverImage=validMediaId(config.bookCoverImage);config.bookIndex=clamp(Math.floor(Number(config.bookIndex)||0),0,config.bookPages.length);config.bookHold=clamp(Number(config.bookHold)||7,4,20);if(!value.notebookLayout){config.statsX=0;config.statsY=0;config.statsZ=0;}config.gpxWidth=clamp(Number(config.gpxWidth)||4,1,16);config.rotation=clamp(Number(config.rotation)||0,-180,180);if(!/^#[0-9a-f]{6}$/i.test(config.gpxColor))config.gpxColor='#e76f32';blockSettings.set(id,config);});editorPeakId=selected[0]||'';
   }catch{}
 }
 
@@ -1065,7 +1125,7 @@ function advancePlayback(delta){
   }
 }
 
-function updateSnow(){blocks.forEach(block=>{const u=block.group.userData.top.material.userData.snow;u.snowLine.value=block.config.snowEnabled?block.config.snowAltitude:1e7;u.snowCoverage.value=block.config.snowCoverage;});}
+function updateSnow(){blocks.forEach(block=>{const u=block.group.userData.top.material.userData.snow;u.snowLine.value=block.config.snowEnabled?block.config.snowAltitude:1e7;u.snowCoverage.value=block.config.snowCoverage;});scheduleSurfaceDecor();}
 
 function bindVideoExport(){
   const types=supportedVideoTypes();
@@ -1100,7 +1160,7 @@ async function runVideoExport(){
   if((mode==='gpx'||mode==='pin')&&!gpxPlayer.routeBlock){showError('Importe un GPX avant de choisir le rendu du parcours.');return;}
   const [width,height]=videoDimensions($('#exportResolution').value,$('#exportOrientation').value);
   const fps=+$('#exportFps').value,ext=$('#exportCodec').value;
-  exportSettings=saveExportView();videoExport.cancelled=false;lockExportControls(true);
+  flushSurfaceDecor();exportSettings=saveExportView();videoExport.cancelled=false;lockExportControls(true);
   $('#renderStatus').textContent='Préparation de l’encodeur…';$('#renderProgress').value=0;
   const started=performance.now();
   try{

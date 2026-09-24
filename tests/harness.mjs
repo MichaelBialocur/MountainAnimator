@@ -1,3 +1,4 @@
+import * as surfaceDecor from '../surface-decor.mjs';
 import * as decor from '../scene-decor.mjs';
 import * as storyVideo from '../story-video.mjs';
 import * as videoMedia from '../video-media.mjs';
@@ -22,6 +23,7 @@ import * as storyMath from '../gpx-story.mjs';
 export function fakeContext(){
   return new Proxy({
     text:[],fillText(text){this.text.push(String(text));},measureText:text=>({width:String(text).length*17}),
+    getImageData:(_x,_y,w,h)=>({width:w,height:h,data:new Uint8ClampedArray(w*h*4)}),
     createImageData:(w,h)=>({data:new Uint8ClampedArray(w*h*4)}),
     createRadialGradient:()=>({addColorStop(){}}),createLinearGradient:()=>({addColorStop(){}})
   },{get(target,key){return key in target?target[key]:(()=>{});}});
@@ -50,12 +52,12 @@ export function appHarness(saved,overrides={}){
     .replace(/^import .*;\n/gm,'')
     .replace('\nrebuildScene();\n','\n// Network loading is replaced by explicit synthetic terrain in tests.\n');
   const sandbox={
-    projectSession:{current:null},...decor,...storyVideo,...videoMedia,...books,...media,...motion,...art,...storyMath,...terrain,...cinemaMath,LineSegments2,LineSegmentsGeometry,LineMaterial,...atmosphere,...video,paintGround:canvas=>canvas,THREE:{...THREE,WebGLRenderer:Renderer},OrbitControls,
+    projectSession:{current:null},...decor,...surfaceDecor,...storyVideo,...videoMedia,...books,...media,...motion,...art,...storyMath,...terrain,...cinemaMath,LineSegments2,LineSegmentsGeometry,LineMaterial,...atmosphere,...video,paintGround:canvas=>canvas,THREE:{...THREE,WebGLRenderer:Renderer},OrbitControls,
     document:window.document,window,navigator:window.navigator,localStorage:window.localStorage,DOMParser:window.DOMParser,
     matchMedia:()=>({matches:false}),devicePixelRatio:1,requestAnimationFrame:()=>0,
     setTimeout:(fn,ms)=>{timers.push({fn,ms});return timers.length;},clearTimeout:()=>{},Image:window.Image,URL,URLSearchParams,console,performance,...overrides
   };
-  const names=['refreshGroundDecor','startFromStoryPin','renderStoryVideo','videoDraftFromEditor','story','storyPinsFor','saveStoryPin','rebuildStoryPins','renderStoryEditor','updateStoryVisuals','scene','camera','controls','floor','gpxPlayer','globalSettings','createBlock','settingsFor','clearBlocks','positionBlocks','buildGpxRoutes','parseGpx','trackStats','setGpxProgress','toggleGpxAnimation','stopGpxAnimation','advancePlayback','followPose','routeOverviewPose','updateFollowCamera','updateCameraTransition','safeCameraHeight','refreshStatsBillboards','makeStatsCanvas','handleGpxFile','restoreProject','saveProject','formatDuration','bindControls','createPeakLabels','updatePeakLabels','clearCloudTerrain','updateSnow','runVideoExport','saveExportView','restoreExportView','sun','ambient','rim','cinema','startCinema','stopCinema','advanceCinema','applyCinemaTime','mountainCameraPose','globalCameraPose','syncCinemaEditor','updateLiveStats','projectSnapshot','makeBookSpread','advanceBookTurns','turnNotebook','notebookCameraPose','normalizeBookShot','syncNotebookEditor','renderNotebookEditor'];
+  const names=['refreshSurfaceDecor','syncSurfaceControls','updateVerticalScale','flushSurfaceDecor','refreshGroundDecor','startFromStoryPin','renderStoryVideo','videoDraftFromEditor','story','storyPinsFor','saveStoryPin','rebuildStoryPins','renderStoryEditor','updateStoryVisuals','scene','camera','controls','floor','gpxPlayer','globalSettings','createBlock','settingsFor','clearBlocks','positionBlocks','buildGpxRoutes','parseGpx','trackStats','setGpxProgress','toggleGpxAnimation','stopGpxAnimation','advancePlayback','followPose','routeOverviewPose','updateFollowCamera','updateCameraTransition','safeCameraHeight','refreshStatsBillboards','makeStatsCanvas','handleGpxFile','restoreProject','saveProject','formatDuration','bindControls','createPeakLabels','updatePeakLabels','clearCloudTerrain','updateSnow','runVideoExport','saveExportView','restoreExportView','sun','ambient','rim','cinema','startCinema','stopCinema','advanceCinema','applyCinemaTime','mountainCameraPose','globalCameraPose','syncCinemaEditor','updateLiveStats','projectSnapshot','makeBookSpread','advanceBookTurns','turnNotebook','notebookCameraPose','normalizeBookShot','syncNotebookEditor','renderNotebookEditor'];
   const api=vm.runInNewContext(source+`\n;({${names.join(',')},get blocks(){return blocks;},set blocks(value){blocks=value;},get gpxTrack(){return gpxTrack;},set gpxTrack(value){gpxTrack=value;}})`,sandbox);
   api.window=window;api.dom=dom;api.timers=timers;
   api.syntheticBlock=(id='chavalard',lon=7.11312)=>{
