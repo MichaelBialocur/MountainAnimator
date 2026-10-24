@@ -13,7 +13,7 @@ import { compileCameraSequence, sampleCameraSequence } from './camera-sequence.m
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
-import { cloudVolume, addSnow, cloudTypeFor } from './atmosphere.mjs?v=17';
+import { cloudVolume, addSnow, cloudTypeFor } from './atmosphere.mjs?v=18';
 import { VideoExport, supportedVideoTypes, videoDimensions } from './video-export.mjs?v=7';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -46,7 +46,7 @@ const globalSettings = {
   ...DECOR_DEFAULTS,
   showGpxStats:true, storyEnabled:true, gpxFollowDistance:1.6, terrainSmoothing:.35, quality:'high', exaggeration:1, brightness:1.25,
   sunAzimuth:315, sunElevation:38, sunIntensity:3.2,
-  clouds:true, cloudDensity:8, cloudDetail:2, cloudOpacity:.7, cloudSize:1,
+  clouds:true, cloudVariation:.85, cloudDensity:8, cloudDetail:2, cloudOpacity:.7, cloudSize:1,
   cloudType:'cumulus', cloudHeight:2600, cloudSpread:900, cloudCumulonimbus:20, cloudCumulus:60, cloudStratus:25, cloudCirrus:15, fillLight:.55, shadows:true, groundTexture:'marble', cloudSeed:1
 };
 const blockSettings = new Map();
@@ -558,6 +558,7 @@ function createSummitMarker(position){
 function createClouds(peak,size){
   const seed=hash(peak.id)+globalSettings.cloudSeed*997,root=new THREE.Group(),rng=seededRandom(seed);
   root.name='clouds';
+  const variety=globalSettings.cloudVariation;
   if(globalSettings.cloudType==='mixed'&&globalSettings.cloudCumulus+globalSettings.cloudStratus+globalSettings.cloudCirrus+globalSettings.cloudCumulonimbus===0)return root;
   for(let i=0;i<globalSettings.cloudDensity;i++){
     const cluster=new THREE.Group(),angle=rng()*Math.PI*2,radius=size*(.22+rng()*.35);
@@ -565,8 +566,12 @@ function createClouds(peak,size){
     const layer=kind==='cumulonimbus'?700:kind==='cirrus'?1400:kind==='stratus'?-350:0;
     const altitude=Math.max(100,globalSettings.cloudHeight+layer+(rng()-.5)*globalSettings.cloudSpread);
     cluster.position.set(Math.cos(angle)*radius,altitude/1000*globalSettings.exaggeration,Math.sin(angle)*radius);
-    const volume=cloudVolume(kind,globalSettings.cloudDetail,seed+i*617,globalSettings.cloudSize*(.8+rng()*.8));
-    cluster.add(volume);volume.material.uniforms.opacity.value=globalSettings.cloudOpacity;
+    const volume=cloudVolume(kind,globalSettings.cloudDetail,seed+i*617,globalSettings.cloudSize*(.8+rng()*.8),variety);
+    const shapeRng=seededRandom(seed+i*617+19357),vary=(low,high)=>1+variety*(low+shapeRng()*(high-low)-1);
+    volume.scale.multiply(new THREE.Vector3(vary(.60,1.45),vary(.62,1.45),vary(.65,1.4)));
+    volume.rotation.y=(shapeRng()-.5)*Math.PI*2*variety;
+    volume.userData.opacityFactor=vary(.72,1.16);
+    cluster.add(volume);volume.material.uniforms.opacity.value=clamp(globalSettings.cloudOpacity*volume.userData.opacityFactor,.05,1);
     cluster.userData={startX:cluster.position.x,startZ:cluster.position.z,phase:rng()*6.28,speed:.055+rng()*.085,volume,kind,altitude,baseY:cluster.position.y};root.add(cluster);
   }
   root.visible=globalSettings.clouds;return root;
@@ -600,7 +605,7 @@ function clearCloudTerrain(){
     });
     cluster.userData.baseY=cluster.userData.altitude/1000*globalSettings.exaggeration;
     cluster.position.y=Math.max(cluster.userData.baseY,height+volume.scale.y/2+.12);
-    const direction=sun.position.clone().normalize();direction.applyAxisAngle(new THREE.Vector3(0,1,0),-owner.group.rotation.y);
+    const direction=sun.position.clone().normalize();direction.applyAxisAngle(new THREE.Vector3(0,1,0),-owner.group.rotation.y);direction.applyQuaternion(volume.quaternion.clone().invert());
     volume.material.uniforms.lightDir.value.copy(direction);
   }));
 }
@@ -958,6 +963,7 @@ function bindControls(){
 
   bindRange('fillLight','fillLightValue',v=>v.toFixed(2),v=>{globalSettings.fillLight=v;applyLighting();});
   bindRange('cloudHeight','cloudHeightValue',v=>`${v} m`,v=>{globalSettings.cloudHeight=v;refreshClouds();});
+  bindRange('cloudVariation','cloudVariationValue',v=>`${Math.round(v*100)} %`,v=>{globalSettings.cloudVariation=v;refreshClouds();});
   bindRange('cloudSpread','cloudSpreadValue',v=>`${v} m`,v=>{globalSettings.cloudSpread=v;refreshClouds();});
   for(const key of ['cloudCumulus','cloudStratus','cloudCirrus','cloudCumulonimbus'])bindRange(key,key+'Value',v=>String(v),v=>{globalSettings[key]=v;refreshClouds();});
 
@@ -981,7 +987,7 @@ function bindControls(){
   $('#cloudToggle').checked=globalSettings.clouds;$('#cloudToggle').addEventListener('change',event=>{globalSettings.clouds=event.target.checked;blocks.forEach(block=>block.group.userData.clouds.visible=globalSettings.clouds);saveProject()});
   bindRange('cloudDensity','cloudDensityValue',value=>String(Math.round(value)),value=>{globalSettings.cloudDensity=Math.round(value);refreshClouds()});
   bindRange('cloudDetail','cloudDetailValue',value=>`${Math.round(value)} / 3`,value=>{globalSettings.cloudDetail=Math.round(value);refreshClouds()});
-  bindRange('cloudOpacity','cloudOpacityValue',value=>`${Math.round(value*100)} %`,value=>{globalSettings.cloudOpacity=value;blocks.forEach(block=>block.group.userData.clouds.children.forEach(cluster=>cluster.userData.volume.material.uniforms.opacity.value=value))});
+  bindRange('cloudOpacity','cloudOpacityValue',value=>`${Math.round(value*100)} %`,value=>{globalSettings.cloudOpacity=value;blocks.forEach(block=>block.group.userData.clouds.children.forEach(cluster=>cluster.userData.volume.material.uniforms.opacity.value=clamp(value*(cluster.userData.volume.userData.opacityFactor??1),.05,1)))});
   bindRange('cloudSize','cloudSizeValue',value=>`${value.toFixed(1).replace('.',',')}×`,value=>{globalSettings.cloudSize=value;refreshClouds()});
   $('#randomizeClouds').addEventListener('click',()=>{globalSettings.cloudSeed++;refreshClouds();saveProject();});
   $('#blockPeakSelect').addEventListener('change',event=>{editorPeakId=event.target.value;syncBlockEditor()});
@@ -1099,6 +1105,7 @@ function restoreProject(){
     if(!GROUND_KINDS.includes(globalSettings.groundTexture))globalSettings.groundTexture='marble';
     if(typeof globalSettings.showGpxStats!=='boolean')globalSettings.showGpxStats=true;
     globalSettings.gpxFollowDistance=clamp(Number(globalSettings.gpxFollowDistance)||1.6,.6,4);
+    globalSettings.cloudVariation=Number.isFinite(globalSettings.cloudVariation)?clamp(globalSettings.cloudVariation,0,1):.85;
     if(!Number.isFinite(globalSettings.cloudSeed))globalSettings.cloudSeed=1;
     Object.entries(saved.blockSettings||{}).forEach(([id,value])=>{const config={...defaultBlockSettings(),...value};Object.assign(config,cleanSurfaceSettings(config));config.bookPages=cleanBookPages(config.bookPages);config.bookOpenAtStart=config.bookOpenAtStart===true;config.bookCloseAtEnd=config.bookCloseAtEnd===true;config.bookCoverTitle=String(config.bookCoverTitle||'').slice(0,80);config.bookCoverSubtitle=String(config.bookCoverSubtitle||'').slice(0,160);config.bookCoverColor=/^#[0-9a-f]{6}$/i.test(config.bookCoverColor)?config.bookCoverColor:'#334e43';config.bookCoverImage=validMediaId(config.bookCoverImage);config.bookIndex=clamp(Math.floor(Number(config.bookIndex)||0),0,config.bookPages.length);config.bookHold=clamp(Number(config.bookHold)||7,4,20);if(!value.notebookLayout){config.statsX=0;config.statsY=0;config.statsZ=0;}config.gpxWidth=clamp(Number(config.gpxWidth)||4,1,16);config.rotation=clamp(Number(config.rotation)||0,-180,180);if(!/^#[0-9a-f]{6}$/i.test(config.gpxColor))config.gpxColor='#e76f32';blockSettings.set(id,config);});editorPeakId=selected[0]||'';
   }catch{}

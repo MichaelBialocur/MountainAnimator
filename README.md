@@ -2,6 +2,12 @@
 
 Application web qui construit automatiquement des **découpes 3D photoréalistes de montagnes**, côte à côte et à la même échelle. L'objectif est de produire directement dans le navigateur le type de composition qui demanderait autrement plusieurs heures dans Blender.
 
+## Nuages variés (V18)
+
+Dans **Nuages**, le réglage **Variété des silhouettes** agit sur la structure de chaque nuage ; valeur initiale 85 %. Les amas n’utilisent plus tous les mêmes centres et rayons : nombre et organisation des volumes, proportions, asymétrie, fragmentation et formes des couches/tours varient. Les nuages ont aussi des largeurs, hauteurs, profondeurs, orientations et opacités relatives différentes. **Nouvelles formes et répartition** renouvelle l’ensemble.
+
+La variation est déterministe à réglages identiques : la composition reste stable après rechargement et pendant l’export image par image. Le contrôle global d’opacité conserve les différences relatives, et la lumière tient compte de l’orientation de chaque volume. Les enveloppes complètes restent utilisées pour éviter les intersections avec les montagnes.
+
 ## Navigation, modification des GPX et nuages (V17)
 
 Pendant le dessin **et** la modification, la molette zoome vers le pointeur, le bouton droit déplace le cadrage, Alt + bouton gauche tourne et Espace + bouton gauche déplace. Les boutons Caméra et Vue du dessus restent disponibles. Le déplacement du cadrage ne crée pas de points.

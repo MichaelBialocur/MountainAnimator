@@ -166,16 +166,18 @@
         <summary class="section-title"><h2>Nuages</h2><span>ATMOSPHÈRE</span></summary>
         <div class="section-body">
         <label class="toggle-row"><span><b>Afficher les nuages</b><small>Nuages réellement répartis en profondeur</small></span><input id="cloudToggle" type="checkbox" checked></label>
-        <label class="select-label"><span>Type de nuages</span><select id="cloudType"><option value="cumulus">Cumulus · volumes cotonneux</option><option value="stratus">Stratus · nappes basses</option><option value="cirrus">Cirrus · voiles étirés</option><option value="cumulonimbus">Cumulonimbus · tours et enclumes</option><option value="mixed">Mélange de nuages</option></select></label>
+        <label class="select-label"><span>Type de nuages</span><select id="cloudType"><option value="cumulus">Cumulus · amas en relief</option><option value="stratus">Stratus · nappes basses</option><option value="cirrus">Cirrus · voiles étirés</option><option value="cumulonimbus">Cumulonimbus · tours et enclumes</option><option value="mixed">Mélange de nuages</option></select></label>
         <label class="range-label"><span>Altitude des nuages <output id="cloudHeightValue">2600 m</output></span><input id="cloudHeight" type="range" min="100" max="8000" step="100" value="2600"></label>
         <label class="range-label"><span>Dispersion verticale <output id="cloudSpreadValue">900 m</output></span><input id="cloudSpread" type="range" min="0" max="2500" step="100" value="900"></label>
         <p class="control-hint">Altitude de référence réelle. Les stratus sont plus bas, les cirrus plus hauts. Un nuage trop bas est relevé pour rester hors du relief.</p>
         <div id="cloudMix" hidden><label class="range-label"><span>Cumulonimbus <output id="cloudCumulonimbusValue">20</output></span><input id="cloudCumulonimbus" type="range" min="0" max="100" step="5" value="20"></label><p class="control-hint">Poids relatifs du mélange (0 pour exclure un type).</p><label class="range-label"><span>Cumulus <output id="cloudCumulusValue">60</output></span><input id="cloudCumulus" type="range" min="0" max="100" step="5" value="60"></label><label class="range-label"><span>Stratus <output id="cloudStratusValue">25</output></span><input id="cloudStratus" type="range" min="0" max="100" step="5" value="25"></label><label class="range-label"><span>Cirrus <output id="cloudCirrusValue">15</output></span><input id="cloudCirrus" type="range" min="0" max="100" step="5" value="15"></label></div>
+        <label class="range-label"><span>Variété des silhouettes <output id="cloudVariationValue">85 %</output></span><input id="cloudVariation" type="range" min="0" max="1" value="0.85" step="0.05"></label>
+        <p class="control-hint">Formes, proportions et orientations différentes par nuage. La composition est conservée dans le projet ; renouvelle-la avec le bouton ci-dessous.</p>
         <label class="range-label"><span>Densité <output id="cloudDensityValue">8</output></span><input id="cloudDensity" type="range" min="1" max="20" value="8" step="1"></label>
         <label class="range-label"><span>Détails volumétriques <output id="cloudDetailValue">2 / 3</output></span><input id="cloudDetail" type="range" min="1" max="3" value="2" step="1"></label>
         <label class="range-label"><span>Opacité <output id="cloudOpacityValue">70 %</output></span><input id="cloudOpacity" type="range" min="0.15" max="1" value="0.7" step="0.05"></label>
         <label class="range-label"><span>Taille <output id="cloudSizeValue">1,0×</output></span><input id="cloudSize" type="range" min="0.4" max="2" value="1" step="0.1"></label>
-        <button id="randomizeClouds" class="secondary wide">↻ Nouvelle répartition des nuages</button>
+        <button id="randomizeClouds" class="secondary wide">↻ Nouvelles formes et répartition</button>
         </div>
       </details>
       <details class="control-section panel-section" data-panel-section id="gpxSection">
@@ -311,6 +313,6 @@
   </script>
   <script type="module" src="peak-dialog.mjs?v=9"></script>
   <script type="module" src="panel-sections.mjs?v=13"></script>
-  <script type="module" src="bootstrap.mjs?v=17"></script>
+  <script type="module" src="bootstrap.mjs?v=18"></script>
 </body>
 </html>
