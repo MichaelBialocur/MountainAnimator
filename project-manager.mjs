@@ -6,7 +6,7 @@ projectSession.onStatus=status;
 function remember(row){sessionStorage.setItem('mountainProjectTab',row.id);localStorage.setItem('mountainProjectLast',row.id);$('activeProjectName').textContent=row.name;}
 function requestedId(){return new URL(location.href).searchParams.get('project')||sessionStorage.getItem('mountainProjectTab')||localStorage.getItem('mountainProjectLast');}
 async function saveCurrent(){
-  const bridge=window.mountainWorkspace;if(bridge?.busy())throw Error('Termine le chargement ou le rendu en cours avant de changer de projet.');
+  const bridge=window.mountainWorkspace;if(bridge?.busy())throw Error(bridge.busyReason?.()||'Termine le chargement ou le rendu en cours avant de changer de projet.');
   if(bridge)projectSession.schedule(bridge.snapshot());
   return await projectSession.flush();
 }
@@ -32,7 +32,7 @@ export async function startProjectManager(){
   $('projectNew').onclick=()=>perform(async()=>{await saveCurrent();await navigate(await createProject($('projectName').value||'Nouveau récit',{}));});
   $('projectDuplicate').onclick=()=>perform(async()=>{
     // A conflict can be rescued as an independent copy without overwriting the other tab.
-    const bridge=window.mountainWorkspace;if(bridge?.busy())throw Error('Attends la fin de l’opération en cours.');
+    const bridge=window.mountainWorkspace;if(bridge?.busy())throw Error(bridge.busyReason?.()||'Attends la fin de l’opération en cours.');
     const snapshot=bridge?bridge.snapshot():projectSession.pending||projectSession.current.snapshot;
     const clone=await duplicateProject({...projectSession.current,snapshot},$('projectName').value||projectSession.current.name+' — copie');
     projectSession.pending=null;projectSession.error=null;clearTimeout(projectSession.timer);await projectSession.queue;await navigate(clone);
@@ -40,7 +40,7 @@ export async function startProjectManager(){
   $('projectRename').onclick=()=>perform(async()=>{await saveCurrent();const current=projectSession.current;projectSession.current=await updateProject(current.id,current.revision,current.snapshot,{name:$('projectName').value,thumbnail:window.mountainWorkspace?.thumbnail()});remember(projectSession.current);await renderList();status('Projet renommé');});
   $('projectSave').onclick=()=>perform(async()=>{await saveCurrent();const current=projectSession.current,thumbnail=window.mountainWorkspace?.thumbnail();if(thumbnail)projectSession.current=await updateProject(current.id,current.revision,current.snapshot,{thumbnail});await renderList();status('Enregistré sur cet appareil');});
   $('projectRefresh').onclick=()=>perform(renderList);
-  $('projectExport').onclick=()=>perform(async()=>{const bridge=window.mountainWorkspace;if(bridge?.busy())throw Error('Attends la fin de l’opération en cours.');let current;try{current=await saveCurrent();}catch(e){if(e.code!=='CONFLICT')throw e;current={...projectSession.current,snapshot:bridge?bridge.snapshot():projectSession.pending};}
+  $('projectExport').onclick=()=>perform(async()=>{const bridge=window.mountainWorkspace;if(bridge?.busy())throw Error(bridge.busyReason?.()||'Attends la fin de l’opération en cours.');let current;try{current=await saveCurrent();}catch(e){if(e.code!=='CONFLICT')throw e;current={...projectSession.current,snapshot:bridge?bridge.snapshot():projectSession.pending};}
     status('Préparation du fichier avec les GPX et les images…');const blob=await exportProjectFile(current),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=(current.name.replace(/[^\p{L}\p{N}_-]+/gu,'-')||'recit')+'.mountainproject';link.click();setTimeout(()=>URL.revokeObjectURL(url),60000);status('Fichier de projet téléchargé avec ses médias');});
   $('projectImport').onchange=e=>{const file=e.target.files?.[0];e.target.value='';if(!file)return;perform(async()=>{await saveCurrent();status('Vérification et import du projet…');const row=await importProjectFile(file);await navigate(row);});};
   $('projectPersist').onclick=()=>perform(async()=>{const granted=await navigator.storage?.persist?.();status(granted?'Stockage persistant accordé. Conserve aussi un fichier de sauvegarde.':'Protection non accordée par le navigateur. Télécharge régulièrement tes projets.');});

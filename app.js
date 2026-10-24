@@ -1,3 +1,5 @@
+import {createRouteEditor} from './route-editor.mjs?v=16';
+import {gpxDocument} from './gpx-drawing.mjs?v=16';
 import {SURFACE_DEFAULTS,cleanSurfaceSettings,analyzeSurfacePixels,planSurfaceDecor} from './surface-decor.mjs?v=15';
 import {DECOR_DEFAULTS,DECOR_PRESETS,cleanDecorSettings,planDecor,createSceneDecor} from './scene-decor.mjs?v=15';
 import {cleanPinVideo,videoStopPlan,samplePinVideo,videoScreenRect,drawVideoFrame} from './story-video.mjs?v=13';
@@ -53,7 +55,7 @@ let selected = ['chavalard','lagginhorn'];
 let editorPeakId = selected[0];
 let blocks = [];
 let gpxTrack = [];
-let gpxSource=null,restoredView=null,restoredPlayback=null;
+let gpxSource=null,restoredView=null,restoredPlayback=null,restoredDrawing=null,routeEditor=null,gpxImportVersion=0;
 let buildVersion = 0;
 let rebuildTimer;
 let statsTimer;
@@ -111,6 +113,9 @@ const rim = new THREE.DirectionalLight(0x8ed9f5, 1.35);
 rim.position.set(28, 12, -22);
 scene.add(rim);
 
+routeEditor=createRouteEditor({canvas,stage,camera,controls,getBlocks:()=>blocks,getSource:()=>gpxSource,getExaggeration:()=>globalSettings.exaggeration,
+  onBegin:()=>{gpxImportVersion++;stopGpxAnimation();$('#rotateButton').classList.remove('active');},onChange:saveProject,onClose:saveProject,
+  onCommit:(points,source,id)=>{gpxPlayer.routeBlock=blocks.find(b=>b.peak.id===id);applyGpx(points,source);$('#gpxSection').open=true;},reportError:showError});
 setupEnvironment();
 applyQuality();
 applyLighting();
@@ -121,7 +126,7 @@ resize();
 rebuildScene();
 
 const clock = new THREE.Clock();
-window.mountainWorkspace={snapshot:projectSnapshot,busy:()=>Boolean(exportSettings||mediaBusy||!$('#loadingPanel').hidden),thumbnail:projectThumbnail};
+window.mountainWorkspace={busyReason:()=>routeEditor?.active?'Termine ou annule le dessin avant de changer de projet.':null,snapshot:projectSnapshot,busy:()=>Boolean(routeEditor?.active||exportSettings||mediaBusy||!$('#loadingPanel').hidden),thumbnail:projectThumbnail};
 controls.addEventListener('end',()=>{if(!cinema.playing&&!gpxPlayer.playing&&!exportSettings)saveProject();});
 requestAnimationFrame(animate);
 
@@ -307,7 +312,7 @@ function syncBlockEditor(){
   syncSurfaceControls();
   $('#blockDiameter').value=config.diameter; $('#blockDiameterValue').value=`${config.diameter} km`;
   $('#blockRotation').value=config.rotation;$('#blockRotationValue').value=`${config.rotation}°`;
-  $('#gpxColor').value=config.gpxColor;$('#gpxWidth').value=config.gpxWidth;$('#gpxWidthValue').value=`${config.gpxWidth} px`;
+  syncRouteStyleControls();
   for(const key of ['snowAltitude','snowCoverage','statsX','statsY','statsZ']){$('#'+key).value=config[key];$('#'+key+'Value').value=key==='snowCoverage'?`${Math.round(config[key]*100)} %`:config[key]+(key==='snowAltitude'?' m':' km');}
   $('#snowEnabled').checked=config.snowEnabled;
   syncOffsetLimits(config);
@@ -316,7 +321,7 @@ function syncBlockEditor(){
 }
 
 async function rebuildScene(){
-  if(videoExport.active)return;
+  if(videoExport.active||routeEditor?.active)return;
   const version=++buildVersion;
   clearTimeout(rebuildTimer);clearTimeout(statsTimer);
   stopCinema();stopGpxAnimation();
@@ -347,12 +352,13 @@ async function rebuildScene(){
   createPeakLabels();
   fitCamera();
   if(restoredView){const v=restoredView;restoredView=null;if(v.position?.length===3&&v.target?.length===3&&[...v.position,...v.target].every(Number.isFinite)){camera.position.fromArray(v.position);controls.target.fromArray(v.target);camera.lookAt(controls.target);controls.update(0);}}
-  syncSurfaceControls();hideLoading();
+  routeEditor.mountOptions();if(restoredDrawing){const draft=restoredDrawing;restoredDrawing=null;routeEditor.restore(draft);}
+  syncSurfaceControls();updateGpxSummary();hideLoading();
   if(results.some(Boolean)&&results.some(value=>!value)) showError('Certaines découpes n’ont pas chargé. Vérifie la connexion puis modifie légèrement un réglage pour réessayer.');
 }
 
 function clearBlocks(){
-  clearTimeout(surfaceTimer);pendingSurface.clear();
+  routeEditor?.close();clearTimeout(surfaceTimer);pendingSurface.clear();
   if(groundDecor){scene.remove(groundDecor);groundDecor.userData.dispose();groundDecor=null;}
   cancelStoryPick();stopCinema();
   blocks.forEach(block=>{
@@ -785,6 +791,7 @@ function buildGpxRoutes(){
   const available=Boolean(bestBlock);$('#gpxPlayButton').disabled=!available;$('#gpxProgress').disabled=!available;$('#gpxTarget').disabled=!available;$('#gpxOverviewButton').disabled=!available;
   $('#gpxTarget').innerHTML=available?blocks.filter(block=>block.group.userData.route).map(block=>`<option value="${block.peak.id}">${escapeHtml(block.peak.name)}</option>`).join(''):'<option>Aucun parcours</option>';
   if(available)$('#gpxTarget').value=gpxPlayer.routeBlock.peak.id;
+  syncRouteStyleControls();
   rebuildStoryPins();renderStoryEditor();
   refreshStatsBillboards();
 }
@@ -946,7 +953,7 @@ function bindControls(){
   bindRange('terrainSmoothing','terrainSmoothingValue',v=>`${Math.round(v*100)} %`,v=>{
     globalSettings.terrainSmoothing=v;stopCinema();blocks.forEach(b=>{b.data.rawHeights??=b.data.heights.slice();const result=cleanTerrain(b.data.rawHeights,b.data.grid,b.data.size*1000/b.data.grid,v);b.data.heights=result.heights;b.data.repaired=result.repaired;});updateVerticalScale();
   });
-  $('#gpxWidth').addEventListener('input',e=>{const config=settingsFor(editorPeakId);config.gpxWidth=+e.target.value;$('#gpxWidthValue').value=`${config.gpxWidth} px`;updateRouteStyle();saveProject();});
+  $('#gpxWidth').addEventListener('input',e=>{const config=gpxPlayer.routeBlock?.config||settingsFor(editorPeakId);config.gpxWidth=+e.target.value;$('#gpxWidthValue').value=`${config.gpxWidth} px`;updateRouteStyle();saveProject();});
   $('#gpxLiveStats').addEventListener('change',e=>{globalSettings.showGpxStats=e.target.checked;updateLiveStats();saveProject();});
 
   bindRange('fillLight','fillLightValue',v=>v.toFixed(2),v=>{globalSettings.fillLight=v;applyLighting();});
@@ -984,8 +991,8 @@ function bindControls(){
   $('#blockNorth').addEventListener('input',event=>{const config=settingsFor(editorPeakId);config.centerNorth=+event.target.value;$('#blockNorthValue').value=formatSigned(config.centerNorth,' km');scheduleRebuild()});
   $('#blockComment').addEventListener('input',event=>{settingsFor(editorPeakId).comment=event.target.value;saveProject();clearTimeout(statsTimer);statsTimer=setTimeout(refreshStatsBillboards,180)});
   $('#blockStatsToggle').addEventListener('change',event=>{settingsFor(editorPeakId).showStats=event.target.checked;saveProject();refreshStatsBillboards()});
-  $('#gpxColor').addEventListener('input',event=>{const color=event.target.value;settingsFor(editorPeakId).gpxColor=color;const route=blocks.find(block=>block.peak.id===editorPeakId)?.group.userData.route;if(route){route.material.color.set(color);route.cursor.material.color.set(color);}saveProject();});
-  $('#gpxTarget').addEventListener('change',event=>{stopGpxAnimation();gpxPlayer.routeBlock=blocks.find(block=>block.peak.id===event.target.value)||null;gpxPlayer.offset=null;newStoryDraft();renderStoryEditor();});
+  $('#gpxColor').addEventListener('input',event=>{const color=event.target.value;const owner=gpxPlayer.routeBlock||blocks.find(b=>b.peak.id===editorPeakId);(owner?.config||settingsFor(editorPeakId)).gpxColor=color;const route=owner?.group.userData.route;if(route){route.material.color.set(color);route.cursor.material.color.set(color);}saveProject();});
+  $('#gpxTarget').addEventListener('change',event=>{stopGpxAnimation();gpxPlayer.routeBlock=blocks.find(block=>block.peak.id===event.target.value)||null;gpxPlayer.offset=null;syncRouteStyleControls();newStoryDraft();renderStoryEditor();saveProject();});
   $('#gpxPlayButton').addEventListener('click',toggleGpxAnimation);$('#gpxFollowToggle').checked=gpxPlayer.follow;
   $('#gpxFollowToggle').addEventListener('change',event=>{
     stopCinema();if(story.active||gpxPlayer.paused)stopGpxAnimation();gpxPlayer.follow=event.target.checked;gpxPlayer.transition=null;
@@ -1000,7 +1007,8 @@ function bindControls(){
   $('#filmButton').addEventListener('click',()=>{document.body.classList.toggle('film-mode');setTimeout(()=>{resize();if(!cinema.playing&&!cinema.paused&&!gpxPlayer.playing&&!gpxPlayer.paused&&!gpxPlayer.transition)fitCamera();},80);if(document.body.classList.contains('film-mode'))document.documentElement.requestFullscreen?.().catch(()=>{})});
   // The sidebar also works if WebGL cannot start (bound in panel-sections.mjs).
   document.addEventListener('mountain:create',handleNewPeak);
-  $('#gpxInput').addEventListener('change',event=>handleGpxFile(event.target.files[0]));
+  $('#gpxInput').addEventListener('change',event=>{const file=event.target.files[0];event.target.value='';handleGpxFile(file);});
+  $('#gpxDownload').addEventListener('click',downloadGpx);
   const drop=$('#dropZone');['dragenter','dragover'].forEach(type=>drop.addEventListener(type,event=>{event.preventDefault();drop.classList.add('dragging')}));['dragleave','drop'].forEach(type=>drop.addEventListener(type,event=>{event.preventDefault();drop.classList.remove('dragging')}));drop.addEventListener('drop',event=>handleGpxFile(event.dataTransfer.files[0]));
   $('#saveButton').addEventListener('click',saveActiveStats);window.addEventListener('resize',resize);canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();showError('Le moteur 3D a perdu le contexte graphique. Recharge la page ou baisse la qualité.')});
   document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement)document.body.classList.remove('film-mode');setTimeout(resize,50)});
@@ -1027,15 +1035,33 @@ function handleNewPeak(event){
   peaks.push(peak);settingsFor(peak.id);if(selected.length<MAX_PEAKS)selected.push(peak.id);editorPeakId=peak.id;renderPeakList();syncBlockEditor();saveProject();rebuildScene();$('#peakForm').reset();
 }
 
+function syncRouteStyleControls(){
+  const owner=gpxPlayer.routeBlock||blocks.find(b=>b.peak.id===editorPeakId),config=owner?.config||settingsFor(editorPeakId);
+  $('#gpxColor').value=config.gpxColor;$('#gpxWidth').value=config.gpxWidth;$('#gpxWidthValue').value=`${config.gpxWidth} px`;
+  $('#gpxStyleTarget').textContent=`Style du tracé · ${owner?.peak.name||peaks.find(p=>p.id===editorPeakId)?.name||'sommet actif'}`;
+}
+function updateGpxSummary(){
+  $('#gpxDownload').disabled=!gpxTrack.length;$('#gpxStats').classList.toggle('loaded',!!gpxTrack.length);
+  if(!gpxTrack.length){$('#gpxStats').textContent='Aucun parcours';return;}
+  const stats=trackStats(gpxTrack);$('#gpxStats').textContent=`${gpxSource?.name||'Parcours'} · ${gpxTrack.length.toLocaleString('fr-CH')} points · ${stats.distance.toFixed(1)} km · ${stats.hasElevation?`+${Math.round(stats.gain).toLocaleString('fr-CH')} m`:'D+ non renseigné'}${gpxSource?.origin==='drawn'?' · altitude du relief':''}`;
+}
+function applyGpx(points,source){
+  stopGpxAnimation();gpxTrack=points;gpxSource=source;gpxPlayer.progress=1;gpxPlayer.offset=null;updateGpxSummary();
+  buildGpxRoutes();routeEditor.mountOptions();newStoryDraft();saveProject();setPlaybackStatus('Tracé complet · Animer pour démarrer depuis la vue actuelle');
+  if(!gpxPlayer.routeBlock)showError('Le GPX est chargé, mais son tracé ne traverse aucune découpe actuellement affichée.');
+}
+function downloadGpx(){
+  if(!gpxTrack.length)return;
+  const text=gpxDocument(gpxTrack,gpxSource?.name?.replace(/\.gpx$/i,'')||'Parcours'),url=URL.createObjectURL(new Blob([text],{type:'application/gpx+xml;charset=utf-8'})),link=document.createElement('a');
+  link.href=url;link.download=(gpxSource?.name||'parcours.gpx').replace(/[<>:"/\\|?*\x00-\x1f]/g,'-');if(!/\.gpx$/i.test(link.download))link.download+='.gpx';link.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
+}
 async function handleGpxFile(file){
-  if(!file)return;
+  if(!file)return;if(routeEditor.active){showError('Termine ou annule le dessin avant d’importer un GPX.');return;}
+  const version=++gpxImportVersion;
   try{
     if(file.size>25*1024*1024)throw Error('Ce GPX dépasse 25 Mo. Simplifie-le avant de l’importer.');
-    const text=await file.text(),imported=parseGpx(text);gpxSource={name:file.name||'parcours.gpx',text};stopGpxAnimation();gpxTrack=imported;const stats=trackStats(gpxTrack);gpxPlayer.progress=1;gpxPlayer.offset=null;
-    $('#gpxStats').textContent=`${gpxTrack.length.toLocaleString('fr-CH')} points · ${stats.distance.toFixed(1)} km · ${stats.hasElevation?`+${Math.round(stats.gain).toLocaleString('fr-CH')} m`:'D+ non renseigné'} (GPX complet)`;$('#gpxStats').classList.add('loaded');
-    buildGpxRoutes();newStoryDraft();saveProject();setPlaybackStatus('Tracé complet · Animer pour démarrer depuis la vue actuelle');
-    if(!gpxPlayer.routeBlock)showError('Le GPX est chargé, mais son tracé ne traverse aucune découpe actuellement affichée.');
-  }catch(error){showError(error.message)}
+    const text=await file.text();if(version!==gpxImportVersion)return;const imported=parseGpx(text);applyGpx(imported,{name:file.name||'parcours.gpx',text});
+  }catch(error){if(version===gpxImportVersion)showError(error.message);}
 }
 
 function saveActiveStats(){
@@ -1043,7 +1069,7 @@ function saveActiveStats(){
 }
 
 function projectSnapshot(){
-  return {cameraShots,narrativePins,customPeaks:peaks.filter(peak=>!PEAKS.some(item=>item.id===peak.id)),selected,globalSettings,blockSettings:Object.fromEntries(blockSettings),gpxTrack,gpxSource,
+  return {routeDraft:routeEditor?.snapshot()||restoredDrawing,cameraShots,narrativePins,customPeaks:peaks.filter(peak=>!PEAKS.some(item=>item.id===peak.id)),selected,globalSettings,blockSettings:Object.fromEntries(blockSettings),gpxTrack,gpxSource,
     view:{position:camera.position.toArray(),target:controls.target.toArray()},
     playback:{duration:gpxPlayer.duration,follow:gpxPlayer.follow,progress:gpxPlayer.progress,target:gpxPlayer.routeBlock?.peak.id},
     exportOptions:Object.fromEntries(['exportResolution','exportOrientation','exportFps','exportMotion','exportDuration','exportCodec'].map(id=>[id,$('#'+id).value]))};
@@ -1063,7 +1089,7 @@ function restoreProject(){
   try{
     const saved=projectSession.current?.snapshot||JSON.parse(localStorage.getItem('mountainAnimatorProjectV3')||'null');if(!saved)return;
     gpxTrack=Array.isArray(saved.gpxTrack)?saved.gpxTrack.map(p=>({...p,ele:Number.isFinite(p.ele)?p.ele:NaN,time:Number.isFinite(p.time)?p.time:NaN})):[];
-    gpxSource=saved.gpxSource||null;restoredView=saved.view||null;restoredPlayback=saved.playback||null;
+    restoredDrawing=saved.routeDraft||null;gpxSource=saved.gpxSource||null;restoredView=saved.view||null;restoredPlayback=saved.playback||null;
     if(restoredPlayback){gpxPlayer.duration=[12,25,45,90].includes(+restoredPlayback.duration)?+restoredPlayback.duration:25;gpxPlayer.follow=restoredPlayback.follow!==false;gpxPlayer.progress=clamp(Number(restoredPlayback.progress)||0);}
     narrativePins=sanitizeStoryPins(saved.narrativePins);
     if(Array.isArray(saved.cameraShots))cameraShots=saved.cameraShots.slice(0,30).filter(s=>['orbit','transfer','book'].includes(s.type));
@@ -1153,6 +1179,7 @@ function saveExportView(){
 
 async function runVideoExport(){
   if(exportSettings)return;
+  if(routeEditor?.active){showError('Termine ou annule le dessin avant de calculer la vidéo.');return;}
   if(!blocks.length||!$('#loadingPanel').hidden){showError('Attends le chargement des montagnes avant d’exporter.');return;}
   if(mediaBusy){showError('Attends la préparation des photos avant d’exporter.');return;}
   const mode=$('#exportMotion').value;

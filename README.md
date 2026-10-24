@@ -2,6 +2,16 @@
 
 Application web qui construit automatiquement des **découpes 3D photoréalistes de montagnes**, côte à côte et à la même échelle. L'objectif est de produire directement dans le navigateur le type de composition qui demanderait autrement plusieurs heures dans Blender.
 
+## Dessiner un GPX dans l’application (V16)
+
+Ouvrir **Parcours GPX**, choisir la montagne, puis **Dessiner un nouveau GPX**. Cliquer pour relier des points ou maintenir le bouton gauche et glisser pour un tracé à main levée. La barre de dessin permet de nommer le parcours, passer entre dessin et caméra, prendre une vue du dessus, annuler/rétablir un trait et valider/annuler le dessin. Échap passe en caméra ; Ctrl/Cmd+Z annule un trait, Ctrl/Cmd+Maj+Z ou Ctrl/Cmd+Y rétablit. Le bouton « Utiliser ce tracé » remplace explicitement le GPX courant ; Annuler conserve celui-ci. Le cadrage de caméra reste celui choisi pendant le dessin.
+
+La prévisualisation et le fichier GPX suivent les triangles du relief, avec des points espacés d’au plus 25 m (plus fins si le maillage l’exige). Altitudes en mètres réels, indépendantes de l’exagération verticale ; aucun temps de marche inventé. Ce dessin est un outil de narration : il ne calcule pas un itinéraire sur les sentiers et ne valide pas sa praticabilité. Le tracé peut ensuite être animé et recevoir des étapes, photos et vidéos comme un fichier importé.
+
+Les brouillons sont sauvegardés avec le projet et repris après rechargement. Terminer/annuler le dessin avant un changement de projet ou un export vidéo. **Continuer le dernier dessin** reprend les points de contrôle du dernier GPX créé ici ; **Télécharger le GPX** exporte le parcours actif. Les traits hors du relief ne créent pas de points ; quitter le terrain pendant un glisser démarre un segment séparé au retour. Limites : 10 000 points de contrôle et 30 000 points GPX générés. La qualité 3D, les décors, les carnets et la narration existants sont conservés.
+
+Refinements : protection contre les imports GPX asynchrones dépassés, réimport du même fichier possible, résumé du parcours restauré au chargement, et cible nommée pour la couleur/l’épaisseur du tracé, alignée sur la montagne suivie. Validation ciblée : 9 contrôles sur historique, interpolation, GPX XML, interactions clic/glisser, reprise de brouillon, import concurrent et style par sommet ; revue du cycle de vie. Le rendu WebGL intégral n’est pas disponible dans le navigateur distant de vérification.
+
 ## Forêts et pierres sur les montagnes (V15)
 
 Dans **Bloc individuel → Forêt & pierres sur le relief**, activer « Décorer la surface de ce sommet ». Les couleurs de l'image satellite suggèrent les zones boisées (vert sombre texturé) et minérales (teintes neutres ou chaudes). Un aperçu les montre en vert et ocre. Il s'agit d'une estimation RGB, pas d'une carte d'occupation du sol : les ombres, les prairies sombres, les routes ou les toits peuvent être confondus. La sensibilité forêt et la limite d'altitude permettent d'ajuster le résultat ; la détection ne distingue pas les essences d'arbres.

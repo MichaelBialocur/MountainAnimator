@@ -62,3 +62,10 @@ label[hidden] { display:none !important; }
 #bookCoverPreview{display:block;width:min(100%,200px);height:auto;margin:14px auto;border-radius:6px;box-shadow:0 8px 24px #0005}
 
 #storyVideoCanvas{position:absolute;inset:0;width:100%;height:100%;z-index:6;pointer-events:none}#storyVideoCanvas[hidden]{display:none}#storyVideoPreview{width:100%;max-height:190px;background:#000}#stage.video-full .stage-topline,#stage.video-full .comparison-bar,#stage.video-full .scene-help,#stage.video-full .attribution,#stage.video-full #peakLabels{visibility:hidden}
+
+.route-create{padding:14px;margin-bottom:16px;border:1px solid #9bb79b45;border-radius:10px;background:#8ab48b0a}.route-create>strong{font-size:12px;color:#d5e1cc}.route-create input{width:100%;box-sizing:border-box}.route-create .wide{margin-top:8px}
+.draw-toolbar{position:absolute;z-index:45;bottom:80px;left:50%;transform:translateX(-50%);width:min(720px,calc(100% - 24px));padding:14px;background:#122323f5;border:1px solid #c7b88780;border-radius:12px;box-shadow:0 14px 50px #0006;color:#eee7d4;box-sizing:border-box}
+.draw-toolbar[hidden]{display:none}.draw-tools,.draw-actions{display:flex;gap:8px;flex-wrap:wrap}.draw-tools button{background:#263a36;color:#eee7d4;border:1px solid #74846b70;border-radius:7px;padding:9px 12px;cursor:pointer}.draw-tools button[aria-pressed=true]{background:#d8c38e;color:#1d2e25;border-color:#d8c38e}.draw-toolbar p{margin:10px 0 5px;font-size:12px}.draw-toolbar small{display:block;color:#b8c6b9;font-size:11px;line-height:1.5}.draw-actions{justify-content:flex-end;margin-top:12px}.draw-actions button{padding:10px 12px}.drawing-route .comparison-bar,.drawing-route .scene-help{display:none}
+@media(max-width:760px){.draw-toolbar{bottom:16px;padding:10px}.draw-tools{gap:5px}.draw-tools button{padding:8px;font-size:11px}.draw-actions button{flex:1;font-size:11px}.draw-toolbar small{font-size:10px}}
+
+.draw-name{display:flex;align-items:center;gap:10px;font-size:11px;margin-bottom:10px}.draw-name input{flex:1;min-width:80px;max-width:380px;padding:7px;background:#0c1c1b;color:#eee7d4;border:1px solid #74846b70;border-radius:6px}
