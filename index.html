@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://services.arcgisonline.com" crossorigin>
   <link rel="preconnect" href="https://elevation-tiles-prod.s3.amazonaws.com" crossorigin>
   <link rel="stylesheet" href="styles.css?v=9">
-  <link rel="stylesheet" href="controls.css?v=16">
+  <link rel="stylesheet" href="controls.css?v=17">
   <script type="importmap">
     {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
@@ -186,8 +186,9 @@
           <label class="select-label"><span>Montagne à dessiner</span><select id="drawMountain"><option>Chargement du relief…</option></select></label>
           <label class="select-label"><span>Nom du parcours</span><input id="drawName" maxlength="100" placeholder="Ex. Arête du Lagginhorn"></label>
           <button id="drawStart" class="primary wide" disabled>✎ Dessiner un nouveau GPX</button>
+          <button id="drawEdit" class="secondary wide" disabled>Modifier le GPX actuel</button>
           <button id="drawContinue" class="secondary wide" disabled>Continuer le dernier dessin</button>
-          <p class="control-hint">Clique pour relier des points, ou maintiens le bouton gauche et glisse pour dessiner à main levée. La trace suit le relief. Le dessin est indicatif et ne recherche pas les sentiers.</p>
+          <p class="control-hint">Clique pour relier des points, ou maintiens le bouton gauche et glisse pour dessiner à main levée. Molette et bouton droit restent disponibles pendant le dessin. La trace suit le relief. Le dessin est indicatif et ne recherche pas les sentiers.</p>
         </div>
         <label class="drop-zone" id="dropZone" for="gpxInput"><span class="upload-icon">⌁</span><b>Déposer ou choisir un GPX</b><small>Le parcours rejoint automatiquement sa montagne</small></label>
         <input id="gpxInput" type="file" accept=".gpx,application/gpx+xml" hidden><div id="gpxStats" class="gpx-stats">Aucun parcours importé</div>
@@ -286,9 +287,9 @@
       <canvas id="storyVideoCanvas" aria-hidden="true" hidden></canvas><canvas id="sceneCanvas"></canvas>
       <div id="drawToolbar" class="draw-toolbar" hidden role="region" aria-label="Dessin du parcours GPX">
         <label class="draw-name">Nom du parcours<input id="drawDraftName" maxlength="100"></label>
-        <div class="draw-tools"><button id="drawToolDraw" aria-pressed="true">✎ Dessiner</button><button id="drawToolCamera" aria-pressed="false">Caméra</button><button id="drawTopView">Vue du dessus</button><button id="drawUndo" title="Annuler · Ctrl+Z" disabled>↶ Annuler</button><button id="drawRedo" title="Rétablir · Ctrl+Maj+Z" disabled>↷ Rétablir</button></div>
+        <div class="draw-tools"><button id="drawToolDraw" aria-pressed="true">✎ Dessiner</button><button id="drawToolEdit" aria-pressed="false">Déplacer les points</button><button id="drawToolInsert" aria-pressed="false">Insérer un point</button><button id="drawToolCamera" aria-pressed="false">Caméra</button><button id="drawTopView">Vue du dessus</button><button id="drawDeletePoint" disabled>Supprimer ce point</button><button id="drawUndo" title="Annuler · Ctrl+Z" disabled>↶ Annuler</button><button id="drawRedo" title="Rétablir · Ctrl+Maj+Z" disabled>↷ Rétablir</button></div>
         <p id="drawStatus" role="status">Clique ou glisse sur la montagne.</p>
-        <small>En mode Dessiner : clics ou glisser avec le bouton gauche. Caméra : tourner et zoomer. Échap libère la caméra.</small>
+        <small>Molette : zoom · bouton droit ou Espace + glisser : déplacer · Alt + glisser : tourner. En mode Modifier : glisse un point bleu ; Suppr pour le retirer.</small>
         <div class="draw-actions"><button id="drawCancel" class="secondary">Annuler le dessin</button><button id="drawFinish" class="primary" disabled>Utiliser ce tracé · remplacer le GPX actuel</button></div>
       </div>
       <div id="renderPanel" class="render-panel" hidden role="dialog" aria-modal="true" aria-label="Rendu vidéo">
@@ -310,6 +311,6 @@
   </script>
   <script type="module" src="peak-dialog.mjs?v=9"></script>
   <script type="module" src="panel-sections.mjs?v=13"></script>
-  <script type="module" src="bootstrap.mjs?v=16"></script>
+  <script type="module" src="bootstrap.mjs?v=17"></script>
 </body>
 </html>

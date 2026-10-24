@@ -1,5 +1,5 @@
-import {createRouteEditor} from './route-editor.mjs?v=16';
-import {gpxDocument} from './gpx-drawing.mjs?v=16';
+import {createRouteEditor} from './route-editor.mjs?v=17';
+import {gpxDocument} from './gpx-drawing.mjs?v=17';
 import {SURFACE_DEFAULTS,cleanSurfaceSettings,analyzeSurfacePixels,planSurfaceDecor} from './surface-decor.mjs?v=15';
 import {DECOR_DEFAULTS,DECOR_PRESETS,cleanDecorSettings,planDecor,createSceneDecor} from './scene-decor.mjs?v=15';
 import {cleanPinVideo,videoStopPlan,samplePinVideo,videoScreenRect,drawVideoFrame} from './story-video.mjs?v=13';
@@ -13,7 +13,7 @@ import { compileCameraSequence, sampleCameraSequence } from './camera-sequence.m
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
-import { cloudVolume, addSnow, cloudTypeFor } from './atmosphere.mjs?v=7';
+import { cloudVolume, addSnow, cloudTypeFor } from './atmosphere.mjs?v=17';
 import { VideoExport, supportedVideoTypes, videoDimensions } from './video-export.mjs?v=7';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -113,7 +113,7 @@ const rim = new THREE.DirectionalLight(0x8ed9f5, 1.35);
 rim.position.set(28, 12, -22);
 scene.add(rim);
 
-routeEditor=createRouteEditor({canvas,stage,camera,controls,getBlocks:()=>blocks,getSource:()=>gpxSource,getExaggeration:()=>globalSettings.exaggeration,
+routeEditor=createRouteEditor({canvas,stage,camera,controls,getBlocks:()=>blocks,getSource:()=>gpxSource,getTrack:()=>gpxTrack,getExaggeration:()=>globalSettings.exaggeration,
   onBegin:()=>{gpxImportVersion++;stopGpxAnimation();$('#rotateButton').classList.remove('active');},onChange:saveProject,onClose:saveProject,
   onCommit:(points,source,id)=>{gpxPlayer.routeBlock=blocks.find(b=>b.peak.id===id);applyGpx(points,source);$('#gpxSection').open=true;},reportError:showError});
 setupEnvironment();
@@ -1046,6 +1046,7 @@ function updateGpxSummary(){
   const stats=trackStats(gpxTrack);$('#gpxStats').textContent=`${gpxSource?.name||'Parcours'} · ${gpxTrack.length.toLocaleString('fr-CH')} points · ${stats.distance.toFixed(1)} km · ${stats.hasElevation?`+${Math.round(stats.gain).toLocaleString('fr-CH')} m`:'D+ non renseigné'}${gpxSource?.origin==='drawn'?' · altitude du relief':''}`;
 }
 function applyGpx(points,source){
+  if(source?.editedFrom&&source.editedFrom===trackFingerprint(gpxTrack)){const nextKey=trackFingerprint(points);narrativePins=narrativePins.map(pin=>pin.track===source.editedFrom?{...pin,track:nextKey}:pin);}
   stopGpxAnimation();gpxTrack=points;gpxSource=source;gpxPlayer.progress=1;gpxPlayer.offset=null;updateGpxSummary();
   buildGpxRoutes();routeEditor.mountOptions();newStoryDraft();saveProject();setPlaybackStatus('Tracé complet · Animer pour démarrer depuis la vue actuelle');
   if(!gpxPlayer.routeBlock)showError('Le GPX est chargé, mais son tracé ne traverse aucune découpe actuellement affichée.');

@@ -69,3 +69,5 @@ label[hidden] { display:none !important; }
 @media(max-width:760px){.draw-toolbar{bottom:16px;padding:10px}.draw-tools{gap:5px}.draw-tools button{padding:8px;font-size:11px}.draw-actions button{flex:1;font-size:11px}.draw-toolbar small{font-size:10px}}
 
 .draw-name{display:flex;align-items:center;gap:10px;font-size:11px;margin-bottom:10px}.draw-name input{flex:1;min-width:80px;max-width:380px;padding:7px;background:#0c1c1b;color:#eee7d4;border:1px solid #74846b70;border-radius:6px}
+
+.draw-toolbar{width:min(860px,calc(100% - 24px))}.draw-tools button{font-size:11px;padding:8px 10px}

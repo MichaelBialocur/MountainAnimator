@@ -46,6 +46,7 @@ export function appHarness(saved,overrides={}){
   const dom=makeDom(),{window}=dom;
   const timers=[];
   Object.defineProperties(window.document.querySelector('#stage'),{clientWidth:{value:1200},clientHeight:{value:750}});
+  Object.defineProperties(window.document.querySelector('#sceneCanvas'),{clientWidth:{value:1200},clientHeight:{value:750}});
   if(saved)window.localStorage.setItem('mountainAnimatorProjectV3',JSON.stringify(saved));
   class Renderer {
     constructor(){this.shadowMap={};this.capabilities={getMaxAnisotropy:()=>8};}

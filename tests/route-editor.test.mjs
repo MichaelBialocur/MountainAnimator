@@ -13,11 +13,11 @@ function setup(){
 }
 test('click and left-drag drawing, grouped undo, terrain GPX commit, draft recovery and cancellation',()=>{
  const {a,b,event,point,click}=setup(),doc=a.window.document;const original=[{lat:46.18,lon:7.09,ele:2400,segment:0},{lat:46.18,lon:7.1,ele:2400,segment:0}];a.applyGpx(original,{name:'original.gpx'});
- a.routeEditor.start();assert.equal(a.controls.enabled,false);assert.equal(doc.getElementById('controlPanel').inert,true);click(-1,0);click(0,0);
+ a.routeEditor.start();assert.equal(a.controls.enabled,true);assert.equal(doc.getElementById('controlPanel').inert,true);click(-1,0);click(0,0);
  event('pointerdown',point(1,0));event('pointermove',point(1.5,.5));event('pointermove',point(2,1));event('pointerup',point(2,1));
  assert.ok(a.routeEditor.snapshot().anchors.length>=5);doc.getElementById('drawUndo').click();assert.equal(a.routeEditor.snapshot().anchors.length,2);doc.getElementById('drawRedo').click();assert.ok(a.routeEditor.snapshot().anchors.length>=5);
  assert.equal(a.gpxTrack,original,'old GPX stays unchanged until use');const draft=a.projectSnapshot().routeDraft;assert.ok(a.window.mountainWorkspace.busy());
- doc.getElementById('drawToolCamera').click();assert.equal(a.controls.enabled,true);doc.getElementById('drawToolDraw').click();assert.equal(a.controls.enabled,false);
+ doc.getElementById('drawToolCamera').click();assert.equal(a.controls.enabled,true);doc.getElementById('drawToolDraw').click();assert.equal(a.controls.enabled,true);
  const restored=appHarness();restored.syntheticBlock();restored.routeEditor.mountOptions();restored.routeEditor.restore(JSON.parse(JSON.stringify(draft)));assert.ok(restored.routeEditor.active);assert.equal(restored.routeEditor.snapshot().anchors.length,draft.anchors.length);restored.routeEditor.close();restored.dom.window.close();
  doc.getElementById('drawFinish').click();assert.equal(a.routeEditor.active,false);assert.equal(doc.getElementById('controlPanel').inert,false);assert.ok(a.gpxTrack.length>5);assert.ok(a.gpxTrack.every(p=>Math.abs(p.ele-2400)<1e-5));assert.ok(b.group.userData.route);
  const snapshot=a.projectSnapshot();assert.equal(snapshot.routeDraft,null);assert.equal(snapshot.gpxSource.origin,'drawn');assert.equal(a.parseGpx(snapshot.gpxSource.text).length,a.gpxTrack.length);assert.equal(doc.getElementById('gpxDownload').disabled,false);

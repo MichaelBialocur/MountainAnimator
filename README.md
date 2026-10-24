@@ -2,6 +2,14 @@
 
 Application web qui construit automatiquement des **découpes 3D photoréalistes de montagnes**, côte à côte et à la même échelle. L'objectif est de produire directement dans le navigateur le type de composition qui demanderait autrement plusieurs heures dans Blender.
 
+## Navigation, modification des GPX et nuages (V17)
+
+Pendant le dessin **et** la modification, la molette zoome vers le pointeur, le bouton droit déplace le cadrage, Alt + bouton gauche tourne et Espace + bouton gauche déplace. Les boutons Caméra et Vue du dessus restent disponibles. Le déplacement du cadrage ne crée pas de points.
+
+**Parcours GPX → Modifier le GPX actuel** permet de déplacer les points bleus par glisser-déposer, d’insérer un point près du trait visible et de supprimer le point sélectionné (bouton ou Suppr). Annuler/rétablir fonctionne pour ces modifications ; une simple sélection ne déplace pas le point. Les GPX importés sont ramenés à des poignées avec une tolérance de simplification de 8 m et un plafond de 2 500 points. Seules les sections dans la découpe choisie sont éditées ; les points extérieurs sont conservés. Les altitudes des sections éditées sont recalculées depuis le relief, sans inventer de temps de parcours. Le brouillon est conservé et le GPX courant n’est remplacé qu’à validation. Les étapes narratives sont réassociées au GPX modifié ; une étape éloignée de plus de 15 m du nouveau parcours reste conservée dans le projet mais peut ne plus apparaître sur le tracé.
+
+Nuages : volumes différenciés par type, bases moins arrondies, fragmentation des bords, couches pour les stratus, filaments pour les cirrus, colonne/enclume pour les cumulonimbus, absorption selon la profondeur et ombres internes. Génération déterministe, mêmes contrôles de mélange/altitude/opacité ; 32/56/96 échantillons aux niveaux de détail 1/2/3. Ce rendu temps réel reste différent d’un rendu de production Blender. Vérification ciblée des interactions de navigation/édition et compilation GLSL hors écran ; pas de campagne de tests complète.
+
 ## Dessiner un GPX dans l’application (V16)
 
 Ouvrir **Parcours GPX**, choisir la montagne, puis **Dessiner un nouveau GPX**. Cliquer pour relier des points ou maintenir le bouton gauche et glisser pour un tracé à main levée. La barre de dessin permet de nommer le parcours, passer entre dessin et caméra, prendre une vue du dessus, annuler/rétablir un trait et valider/annuler le dessin. Échap passe en caméra ; Ctrl/Cmd+Z annule un trait, Ctrl/Cmd+Maj+Z ou Ctrl/Cmd+Y rétablit. Le bouton « Utiliser ce tracé » remplace explicitement le GPX courant ; Annuler conserve celui-ci. Le cadrage de caméra reste celui choisi pendant le dessin.
